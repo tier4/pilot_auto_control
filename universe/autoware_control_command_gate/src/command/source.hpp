@@ -42,10 +42,10 @@ protected:
   void send_gear(const GearCommand & msg);
   void send_turn_indicators(const TurnIndicatorsCommand & msg);
   void send_hazard_lights(const HazardLightsCommand & msg);
-  const uint16_t source_id_;
-  const std::string source_name_;
 
 private:
+  const uint16_t source_id_;
+  const std::string source_name_;
   CommandOutput * output_;
   std::unique_ptr<TimeoutDiag> timeout_;
 };
