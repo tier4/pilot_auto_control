@@ -20,7 +20,6 @@
 #include "compatibility/moderate_stop_interface.hpp"
 #include "interface.hpp"
 
-#include <autoware/agnocast_wrapper/node.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include <memory>
@@ -32,13 +31,13 @@ namespace autoware::control_command_gate
 class Compatibility : public CommandBridge
 {
 public:
-  Compatibility(std::unique_ptr<CommandOutput> && output, autoware::agnocast_wrapper::Node & node);
+  Compatibility(std::unique_ptr<CommandOutput> && output, rclcpp::Node & node);
   void publish();
   void set_prev_control(std::shared_ptr<Control> control) { prev_control_ = control; }
   void on_control(const Control & msg) override;
 
 private:
-  autoware::agnocast_wrapper::Node & node_;
+  rclcpp::Node & node_;
   std::shared_ptr<Control> prev_control_;
   std::unique_ptr<AdapiPauseInterface> adapi_pause_;
   std::unique_ptr<EmergencyInterface> emergency_;

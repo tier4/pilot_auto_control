@@ -30,8 +30,6 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-#include <autoware/agnocast_wrapper/diagnostic_updater.hpp>
-#include <autoware/agnocast_wrapper/node.hpp>
 #include <tf2/utils.hpp>
 
 #include "autoware_adapi_v1_msgs/msg/operation_mode_state.hpp"
@@ -66,8 +64,7 @@ class PidLongitudinalController : public trajectory_follower::LongitudinalContro
 public:
   /// \param node Reference to the node used only for the component and parameter initialization.
   explicit PidLongitudinalController(
-    autoware::agnocast_wrapper::Node & node,
-    std::shared_ptr<autoware::agnocast_wrapper::diagnostic_updater::Updater> diag_updater);
+    rclcpp::Node & node, std::shared_ptr<diagnostic_updater::Updater> diag_updater);
 
 private:
   struct Motion
@@ -109,11 +106,13 @@ private:
   rclcpp::Clock::SharedPtr clock_;
   rclcpp::Logger logger_;
   // ros variables
-  AUTOWARE_PUBLISHER_PTR(autoware_internal_debug_msgs::msg::Float32MultiArrayStamped) m_pub_slope;
-  AUTOWARE_PUBLISHER_PTR(autoware_internal_debug_msgs::msg::Float32MultiArrayStamped) m_pub_debug;
-  AUTOWARE_PUBLISHER_PTR(MarkerArray) m_pub_virtual_wall_marker;
+  rclcpp::Publisher<autoware_internal_debug_msgs::msg::Float32MultiArrayStamped>::SharedPtr
+    m_pub_slope;
+  rclcpp::Publisher<autoware_internal_debug_msgs::msg::Float32MultiArrayStamped>::SharedPtr
+    m_pub_debug;
+  rclcpp::Publisher<MarkerArray>::SharedPtr m_pub_virtual_wall_marker;
 
-  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr m_set_param_res;
+  rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr m_set_param_res;
   rcl_interfaces::msg::SetParametersResult paramCallback(
     const std::vector<rclcpp::Parameter> & parameters);
 
@@ -262,7 +261,7 @@ private:
   std::shared_ptr<rclcpp::Time> m_last_running_time{std::make_shared<rclcpp::Time>(clock_->now())};
 
   // Diagnostic
-  std::shared_ptr<autoware::agnocast_wrapper::diagnostic_updater::Updater>
+  std::shared_ptr<diagnostic_updater::Updater>
     diag_updater_{};  // Diagnostic updater for publishing diagnostic data.
   void setupDiagnosticUpdater();
   void checkControlState(diagnostic_updater::DiagnosticStatusWrapper & stat);

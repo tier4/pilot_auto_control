@@ -14,18 +14,14 @@ ament_auto_add_library(autoware_operation_mode_transition_manager_node SHARED
   src/autonomous_mode_transition_flag_node.cpp
 )
 
-autoware_agnocast_wrapper_register_node(autoware_operation_mode_transition_manager_node
+rclcpp_components_register_node(autoware_operation_mode_transition_manager_node
   PLUGIN "autoware::operation_mode_transition_manager::OperationModeTransitionManager"
   EXECUTABLE autoware_operation_mode_transition_manager_exe
-  ROS2_EXECUTOR SingleThreadedExecutor
-  AGNOCAST_EXECUTOR AgnocastOnlyCallbackIsolatedExecutor
 )
 
-autoware_agnocast_wrapper_register_node(autoware_operation_mode_transition_manager_node
+rclcpp_components_register_node(autoware_operation_mode_transition_manager_node
   PLUGIN "autoware::operation_mode_transition_manager::AutonomousModeTransitionFlagNode"
   EXECUTABLE autonomous_mode_transition_flag_node
-  ROS2_EXECUTOR SingleThreadedExecutor
-  AGNOCAST_EXECUTOR AgnocastOnlyCallbackIsolatedExecutor
 )
 
 rosidl_generate_interfaces(

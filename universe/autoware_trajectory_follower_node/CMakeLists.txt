@@ -13,7 +13,7 @@ ament_auto_add_library(${CONTROLLER_NODE} SHARED
 autoware_agnocast_wrapper_register_node(${CONTROLLER_NODE}
   PLUGIN "autoware::motion::control::trajectory_follower_node::Controller"
   EXECUTABLE ${CONTROLLER_NODE}_exe
-  AGNOCAST_EXECUTOR AgnocastOnlyCallbackIsolatedExecutor
+  AGNOCAST_EXECUTOR CallbackIsolatedAgnocastExecutor
   ROS2_EXECUTOR SingleThreadedExecutor
 )
 
@@ -31,8 +31,7 @@ autoware_agnocast_wrapper_register_node(${SIMPLE_TRAJECTORY_FOLLOWER_NODE}
   ROS2_EXECUTOR SingleThreadedExecutor
 )
 
-# Controller is an agnocast_wrapper::Node; the gtest main brings up no agnocast context.
-if(BUILD_TESTING AND NOT "$ENV{ENABLE_AGNOCAST}" STREQUAL "1")
+if(BUILD_TESTING)
   set(TRAJECTORY_FOLLOWER_NODES_TEST test_trajectory_follower_node)
   ament_add_ros_isolated_gtest(${TRAJECTORY_FOLLOWER_NODES_TEST}
     test/trajectory_follower_test_utils.hpp
