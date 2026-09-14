@@ -22,26 +22,14 @@ namespace autoware::operation_mode_transition_manager
 {
 
 OperationModeTransitionManager::OperationModeTransitionManager(const rclcpp::NodeOptions & options)
-: autoware::agnocast_wrapper::Node("autoware_operation_mode_transition_manager", options),
-  compatibility_(this)
+: Node("autoware_operation_mode_transition_manager", options), compatibility_(this)
 {
   cli_control_mode_ = create_client<ControlModeCommand>("control_mode_request");
   pub_debug_info_ = create_publisher<ModeChangeBase::DebugInfo>("~/debug_info", 1);
 
-  namespace polling = autoware::agnocast_wrapper::polling;
-  sub_kinematics_ = polling::create_polling_subscriber<Odometry>(this, "kinematics");
-  sub_trajectory_ = polling::create_polling_subscriber<Trajectory>(this, "trajectory");
-  sub_trajectory_follower_control_cmd_ =
-    polling::create_polling_subscriber<Control>(this, "trajectory_follower_control_cmd");
-  sub_control_cmd_ = polling::create_polling_subscriber<Control>(this, "control_cmd");
-  sub_gate_operation_mode_ =
-    polling::create_polling_subscriber<OperationModeState>(this, "gate_operation_mode");
-  sub_control_mode_report_ =
-    polling::create_polling_subscriber<ControlModeReport>(this, "control_mode_report");
-
   // component interface
   {
-    const auto node = autoware::component_interface_utils::NodeAdaptor<NodeT>(this);
+    const auto node = autoware::component_interface_utils::NodeAdaptor(this);
     node.init_srv(
       srv_autoware_control_, this, &OperationModeTransitionManager::onChangeAutowareControl);
     node.init_srv(
@@ -52,7 +40,7 @@ OperationModeTransitionManager::OperationModeTransitionManager(const rclcpp::Nod
   // timer
   {
     const auto period_ns = rclcpp::Rate(declare_parameter<double>("frequency_hz")).period();
-    timer_ = autoware::agnocast_wrapper::create_timer(
+    timer_ = rclcpp::create_timer(
       this, get_clock(), period_ns, std::bind(&OperationModeTransitionManager::onTimer, this));
   }
 
@@ -113,7 +101,7 @@ void OperationModeTransitionManager::onChangeOperationMode(
 
 void OperationModeTransitionManager::changeControlMode(ControlModeCommandType mode)
 {
-  const auto callback = [this](AUTOWARE_CLIENT_SHARED_FUTURE(ControlModeCommand) future) {
+  const auto callback = [this](rclcpp::Client<ControlModeCommand>::SharedFuture future) {
     if (!future.get()->success) {
       RCLCPP_WARN(get_logger(), "Autonomous mode change was rejected.");
       if (transition_) {
@@ -265,7 +253,7 @@ InputData OperationModeTransitionManager::subscribeData()
 {
   InputData input_data;
 
-  const auto kinematics_ptr = sub_kinematics_->take_data();
+  const auto kinematics_ptr = sub_kinematics_.take_data();
   if (kinematics_ptr) {
     if (input_timeout_ < (now() - kinematics_ptr->header.stamp).seconds()) {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000, "Subscribed kinematics is timed out.");
@@ -274,7 +262,7 @@ InputData OperationModeTransitionManager::subscribeData()
     }
   }
 
-  const auto trajectory_ptr = sub_trajectory_->take_data();
+  const auto trajectory_ptr = sub_trajectory_.take_data();
   if (trajectory_ptr) {
     if (input_timeout_ < (now() - trajectory_ptr->header.stamp).seconds()) {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000, "Subscribed trajectory is timed out.");
@@ -283,8 +271,7 @@ InputData OperationModeTransitionManager::subscribeData()
     }
   }
 
-  const auto trajectory_follower_control_cmd_ptr =
-    sub_trajectory_follower_control_cmd_->take_data();
+  const auto trajectory_follower_control_cmd_ptr = sub_trajectory_follower_control_cmd_.take_data();
   if (trajectory_follower_control_cmd_ptr) {
     if (input_timeout_ < (now() - trajectory_follower_control_cmd_ptr->stamp).seconds()) {
       RCLCPP_WARN_THROTTLE(
@@ -295,7 +282,7 @@ InputData OperationModeTransitionManager::subscribeData()
     }
   }
 
-  const auto control_cmd_ptr = sub_control_cmd_->take_data();
+  const auto control_cmd_ptr = sub_control_cmd_.take_data();
   if (control_cmd_ptr) {
     if (input_timeout_ < (now() - control_cmd_ptr->stamp).seconds()) {
       RCLCPP_WARN_THROTTLE(
@@ -307,7 +294,7 @@ InputData OperationModeTransitionManager::subscribeData()
 
   // NOTE: Do not check the timeout of gate_operation_mode since the timestamp of this node's output
   // is used in the vehicle_cmd_gate node, which is updated only when the state changes.
-  const auto gate_operation_mode_ptr = sub_gate_operation_mode_->take_data();
+  const auto gate_operation_mode_ptr = sub_gate_operation_mode_.take_data();
   if (gate_operation_mode_ptr) {
     input_data.gate_operation_mode = *gate_operation_mode_ptr;
   } else {
@@ -317,7 +304,7 @@ InputData OperationModeTransitionManager::subscribeData()
     input_data.gate_operation_mode.is_in_transition = false;
   }
 
-  const auto control_mode_report_ptr = sub_control_mode_report_->take_data();
+  const auto control_mode_report_ptr = sub_control_mode_report_.take_data();
   if (control_mode_report_ptr) {
     // NOTE: This will be used outside the onTimer function. Therefore, it
     // has to be a member variable

@@ -21,11 +21,9 @@ target_link_libraries(${PROJECT_NAME}
   ${PCL_LIBRARIES}
 )
 
-autoware_agnocast_wrapper_register_node(${PROJECT_NAME}
+rclcpp_components_register_node(${PROJECT_NAME}
   PLUGIN "autoware::collision_detector::CollisionDetectorNode"
   EXECUTABLE ${PROJECT_NAME}_node
-  AGNOCAST_EXECUTOR AgnocastOnlyCallbackIsolatedExecutor
-  ROS2_EXECUTOR SingleThreadedExecutor
 )
 
 ament_auto_package(

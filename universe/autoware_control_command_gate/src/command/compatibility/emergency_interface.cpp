@@ -14,12 +14,10 @@
 
 #include "emergency_interface.hpp"
 
-#include <utility>
-
 namespace autoware::control_command_gate
 {
 
-EmergencyInterface::EmergencyInterface(NodeT * node) : node_(node)
+EmergencyInterface::EmergencyInterface(rclcpp::Node * node) : node_(node)
 {
   pub_external_emergency_ = node_->create_publisher<Emergency>(
     "/api/autoware/get/emergency", rclcpp::QoS(1).transient_local());
@@ -30,10 +28,10 @@ EmergencyInterface::EmergencyInterface(NodeT * node) : node_(node)
 
 void EmergencyInterface::publish()
 {
-  auto msg = ALLOCATE_OUTPUT_MESSAGE_UNIQUE(pub_external_emergency_);
-  msg->stamp = node_->now();
-  msg->emergency = is_emergency_;
-  pub_external_emergency_->publish(std::move(msg));
+  Emergency msg;
+  msg.stamp = node_->now();
+  msg.emergency = is_emergency_;
+  pub_external_emergency_->publish(msg);
 }
 
 void EmergencyInterface::on_service(

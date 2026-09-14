@@ -16,7 +16,6 @@ ament_auto_add_library(autoware_autonomous_emergency_braking_helpers SHARED
   include/autoware/autonomous_emergency_braking/utils.hpp
   src/utils.cpp
 )
-autoware_agnocast_wrapper_setup(autoware_autonomous_emergency_braking_helpers)
 
 set(AEB_NODE ${PROJECT_NAME}_node)
 ament_auto_add_library(${AEB_NODE} SHARED
@@ -25,14 +24,12 @@ ament_auto_add_library(${AEB_NODE} SHARED
 )
 
 target_link_libraries(${AEB_NODE} autoware_autonomous_emergency_braking_helpers)
-autoware_agnocast_wrapper_register_node(${AEB_NODE}
+rclcpp_components_register_node(${AEB_NODE}
   PLUGIN "autoware::motion::control::autonomous_emergency_braking::AEB"
   EXECUTABLE ${PROJECT_NAME}
-  AGNOCAST_EXECUTOR AgnocastOnlyCallbackIsolatedExecutor
-  ROS2_EXECUTOR SingleThreadedExecutor
 )
 
-if(BUILD_TESTING AND NOT "$ENV{ENABLE_AGNOCAST}" STREQUAL "1")
+if(BUILD_TESTING)
   ament_add_ros_isolated_gtest(test_aeb
   test/test.cpp)
 

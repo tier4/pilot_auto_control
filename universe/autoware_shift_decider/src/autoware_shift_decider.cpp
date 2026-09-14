@@ -19,7 +19,6 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
-#include <utility>
 
 namespace autoware::shift_decider
 {
@@ -27,6 +26,8 @@ namespace autoware::shift_decider
 ShiftDecider::ShiftDecider(const rclcpp::NodeOptions & node_options)
 : Node("shift_decider", node_options)
 {
+  using std::placeholders::_1;
+
   static constexpr std::size_t queue_size = 1;
   rclcpp::QoS durable_qos(queue_size);
   durable_qos.transient_local();
@@ -43,9 +44,9 @@ ShiftDecider::ShiftDecider(const rclcpp::NodeOptions & node_options)
 
 void ShiftDecider::onTimer()
 {
-  control_cmd_ = sub_control_cmd_->take_data();
-  autoware_state_ = sub_autoware_state_->take_data();
-  current_gear_ptr_ = sub_current_gear_->take_data();
+  control_cmd_ = sub_control_cmd_.take_data();
+  autoware_state_ = sub_autoware_state_.take_data();
+  current_gear_ptr_ = sub_current_gear_.take_data();
   if (!autoware_state_ || !control_cmd_ || !current_gear_ptr_) {
     return;
   }
@@ -86,8 +87,8 @@ void ShiftDecider::initTimer(double period_s)
 {
   const auto period_ns =
     std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(period_s));
-  timer_ = autoware::agnocast_wrapper::create_timer(
-    this, get_clock(), period_ns, std::bind(&ShiftDecider::onTimer, this));
+  timer_ =
+    rclcpp::create_timer(this, get_clock(), period_ns, std::bind(&ShiftDecider::onTimer, this));
 }
 }  // namespace autoware::shift_decider
 

@@ -17,9 +17,9 @@
 namespace autoware::control_command_gate
 {
 
-AdapiPauseInterface::AdapiPauseInterface(NodeT * node) : node_(node)
+AdapiPauseInterface::AdapiPauseInterface(rclcpp::Node * node) : node_(node)
 {
-  const auto adaptor = autoware::component_interface_utils::NodeAdaptor<NodeT>(node);
+  const auto adaptor = autoware::component_interface_utils::NodeAdaptor(node);
   adaptor.init_srv(srv_set_pause_, this, &AdapiPauseInterface::on_pause);
   adaptor.init_pub(pub_is_paused_);
   adaptor.init_pub(pub_is_start_requested_);
