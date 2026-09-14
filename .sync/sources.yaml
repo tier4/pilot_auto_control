@@ -85,12 +85,11 @@ combined:
     # commit id. The result is a deterministic function of (published tip,
     # member tips) and always fast-forwards.
     order_by: committer_date
-    # Each member is filed under the name of its upstream. The two control/
-    # trees do not collide today, but filing them separately keeps that from
-    # mattering and mirrors the awf-latest/universe and awf-latest/core
-    # branch names.
+    # The trusted universe-side history is feat/v0.64/e2e (tier4 fork), not
+    # autoware_universe:main. Core and launch are filed alongside it.
+    # Everything else at the root comes from the e2e mirror.
     members:
-      - source: autoware_universe
+      - source: tier4_universe_e2e
         rename:
           control: universe
       - source: autoware_core
