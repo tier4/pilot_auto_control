@@ -10,18 +10,18 @@ This branch only holds the mirror configuration and its tooling. See the mirror 
 | --- | --- |
 | `awf-latest/universe` | `autowarefoundation/autoware_universe:main`, control paths |
 | `awf-latest/core` | `autowarefoundation/autoware_core:main`, control paths |
-| `awf-launch-latest` | `autowarefoundation/autoware_launch:main`, `autoware_control_config`, `autoware_control_launch` |
+| `e2e-launch-latest` | `tier4/autoware_launch.x2:feat/v4.4/e2e_scenario_pass`, `autoware_control_config`, `autoware_control_launch` |
 | `feat/v0.64/e2e_scenario_pass` | `tier4/autoware_universe:feat/v0.64/e2e_scenario_pass`, control paths |
 | `feat/v0.64/e2e_scenario_pass-core` | `tier4/autoware_core:feat/v0.64/e2e_scenario_pass`, control paths |
-| `e2e-combined-latest` | `feat/v0.64/e2e_scenario_pass`, `feat/v0.64/e2e_scenario_pass-core`, and `awf-launch-latest` replayed into one linear history |
+| `e2e-awf-combined-latest` | `feat/v0.64/e2e_scenario_pass`, `feat/v0.64/e2e_scenario_pass-core`, and `e2e-launch-latest` replayed into one linear history |
 
 The combined branch treats the tier4 `feat/v0.64/e2e_scenario_pass` branches of
 `autoware_universe` and `autoware_core` as the trusted histories (not AWF
-`main`). Launch stays on `awf-launch-latest`; everything else at the root
-comes from the universe e2e mirror.
+`main`). Launch comes from `autoware_launch.x2` via `e2e-launch-latest`;
+everything else at the root comes from the universe e2e mirror.
 
 ```text
-e2e-combined-latest/
+e2e-awf-combined-latest/
 ├── universe/                   # from feat/v0.64/e2e_scenario_pass (tier4/autoware_universe)
 ├── core/                       # from feat/v0.64/e2e_scenario_pass-core (tier4/autoware_core)
 ├── launch/
