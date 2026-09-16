@@ -18,11 +18,9 @@
 #include "compatibility.hpp"
 #include "state.hpp"
 
-#include <autoware/agnocast_wrapper/autoware_agnocast_wrapper.hpp>
-#include <autoware/agnocast_wrapper/node.hpp>
-#include <autoware/agnocast_wrapper/polling_subscriber.hpp>
 #include <autoware/component_interface_specs_universe/system.hpp>
 #include <autoware/component_interface_utils/rclcpp.hpp>
+#include <autoware_utils/ros/polling_subscriber.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include <memory>
@@ -31,24 +29,23 @@
 namespace autoware::operation_mode_transition_manager
 {
 
-class OperationModeTransitionManager : public autoware::agnocast_wrapper::Node
+class OperationModeTransitionManager : public rclcpp::Node
 {
 public:
   explicit OperationModeTransitionManager(const rclcpp::NodeOptions & options);
 
 private:
-  using NodeT = autoware::agnocast_wrapper::Node;
   using ChangeAutowareControlAPI =
     autoware::component_interface_specs_universe::system::ChangeAutowareControl;
   using ChangeOperationModeAPI =
     autoware::component_interface_specs_universe::system::ChangeOperationMode;
   using OperationModeStateAPI =
     autoware::component_interface_specs_universe::system::OperationModeState;
-  autoware::component_interface_utils::Service<ChangeAutowareControlAPI, NodeT>::SharedPtr
+  autoware::component_interface_utils::Service<ChangeAutowareControlAPI>::SharedPtr
     srv_autoware_control_;
-  autoware::component_interface_utils::Service<ChangeOperationModeAPI, NodeT>::SharedPtr
+  autoware::component_interface_utils::Service<ChangeOperationModeAPI>::SharedPtr
     srv_operation_mode_;
-  autoware::component_interface_utils::Publisher<OperationModeStateAPI, NodeT>::SharedPtr
+  autoware::component_interface_utils::Publisher<OperationModeStateAPI>::SharedPtr
     pub_operation_mode_;
   void onChangeAutowareControl(
     const ChangeAutowareControlAPI::Service::Request::SharedPtr request,
@@ -58,19 +55,19 @@ private:
     const ChangeOperationModeAPI::Service::Response::SharedPtr response);
 
   using ControlModeCommandType = ControlModeCommand::Request::_mode_type;
-  autoware::agnocast_wrapper::polling::PollingSubscriber<Odometry>::SharedPtr sub_kinematics_;
-  autoware::agnocast_wrapper::polling::PollingSubscriber<Trajectory>::SharedPtr sub_trajectory_;
-  autoware::agnocast_wrapper::polling::PollingSubscriber<Control>::SharedPtr
-    sub_trajectory_follower_control_cmd_;
-  autoware::agnocast_wrapper::polling::PollingSubscriber<Control>::SharedPtr sub_control_cmd_;
-  autoware::agnocast_wrapper::polling::PollingSubscriber<OperationModeState>::SharedPtr
-    sub_gate_operation_mode_;
-  autoware::agnocast_wrapper::polling::PollingSubscriber<ControlModeReport>::SharedPtr
-    sub_control_mode_report_;
+  autoware_utils::InterProcessPollingSubscriber<Odometry> sub_kinematics_{this, "kinematics"};
+  autoware_utils::InterProcessPollingSubscriber<Trajectory> sub_trajectory_{this, "trajectory"};
+  autoware_utils::InterProcessPollingSubscriber<Control> sub_trajectory_follower_control_cmd_{
+    this, "trajectory_follower_control_cmd"};
+  autoware_utils::InterProcessPollingSubscriber<Control> sub_control_cmd_{this, "control_cmd"};
+  autoware_utils::InterProcessPollingSubscriber<OperationModeState> sub_gate_operation_mode_{
+    this, "gate_operation_mode"};
+  autoware_utils::InterProcessPollingSubscriber<ControlModeReport> sub_control_mode_report_{
+    this, "control_mode_report"};
 
-  AUTOWARE_CLIENT_PTR(ControlModeCommand) cli_control_mode_;
-  AUTOWARE_PUBLISHER_PTR(ModeChangeBase::DebugInfo) pub_debug_info_;
-  AUTOWARE_TIMER_PTR timer_;
+  rclcpp::Client<ControlModeCommand>::SharedPtr cli_control_mode_;
+  rclcpp::Publisher<ModeChangeBase::DebugInfo>::SharedPtr pub_debug_info_;
+  rclcpp::TimerBase::SharedPtr timer_;
   void onTimer();
   InputData subscribeData();
   void publishData();
