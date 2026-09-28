@@ -22,6 +22,9 @@
 #include <autoware/agnocast_wrapper/polling_subscriber.hpp>
 #include <rclcpp/rclcpp.hpp>
 
+#include <diagnostic_msgs/msg/diagnostic_array.hpp>
+#include <tier4_system_msgs/msg/driving_mode_flag.hpp>
+#include <tier4_system_msgs/msg/driving_mode_info.hpp>
 #include <tier4_system_msgs/msg/mode_change_available.hpp>
 
 #include <memory>
@@ -36,6 +39,9 @@ public:
 
 private:
   using ModeChangeAvailable = tier4_system_msgs::msg::ModeChangeAvailable;
+  using DrivingModeFlag = tier4_system_msgs::msg::DrivingModeFlag;
+  using DrivingModeInfo = tier4_system_msgs::msg::DrivingModeInfo;
+  using DiagnosticArray = diagnostic_msgs::msg::DiagnosticArray;
   void on_timer();
   InputData take_data();
 
@@ -52,6 +58,15 @@ private:
   PollingSubscriber<Control>::SharedPtr sub_trajectory_follower_control_cmd_;
 
   std::unique_ptr<ModeChangeBase> autonomous_mode_;
+
+  // Driving mode interface
+  rclcpp::Subscription<DrivingModeInfo>::SharedPtr sub_driving_mode_info_;
+  rclcpp::Publisher<DrivingModeFlag>::SharedPtr pub_driving_mode_stable_;
+  rclcpp::Publisher<DiagnosticArray>::SharedPtr pub_driving_mode_available_;
+  void on_driving_mode_info(const DrivingModeInfo & msg);
+  void publish_driving_mode_stable(bool flag) const;
+  void publish_driving_mode_available(bool flag) const;
+  std::optional<uint32_t> driving_mode_id_;  // Refer to the driving_mode_manager for this ID.
 };
 
 }  // namespace autoware::operation_mode_transition_manager
