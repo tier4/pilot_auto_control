@@ -129,8 +129,12 @@ private:
   AUTOWARE_PUBLISHER_PTR(autoware_control_msgs::msg::ControlHorizon) control_cmd_horizon_pub_;
 
   autoware_planning_msgs::msg::Trajectory::ConstSharedPtr current_trajectory_ptr_;
-  // agnocast_polling::PollingSubscriber exposes no last_taken_data_timestamp().
+  // agnocast_polling::PollingSubscriber exposes no last_taken_data_timestamp(), so both of
+  // these are stamped by hand when a trajectory is taken.
+  // Liveness of the trajectory topic, for the cyclic message timeout diagnostic.
   std::optional<rclcpp::Time> last_trajectory_taken_time_;
+  // When the current plan was first taken; retained while that plan is reused.
+  std::optional<rclcpp::Time> trajectory_received_at_;
   nav_msgs::msg::Odometry::ConstSharedPtr current_odometry_ptr_;
   autoware_vehicle_msgs::msg::SteeringReport::ConstSharedPtr current_steering_ptr_;
   geometry_msgs::msg::AccelWithCovarianceStamped::ConstSharedPtr current_accel_ptr_;
