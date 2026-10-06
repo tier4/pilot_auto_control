@@ -39,6 +39,7 @@ class VehicleStatus
 public:
   explicit VehicleStatus(autoware::agnocast_wrapper::Node & node);
   bool is_autoware_control_enabled() const;
+  bool is_autoware_lateral_control_enabled() const;
   bool is_vehicle_stopped() const;
   double get_current_steering() const;
   double get_current_velocity() const;
