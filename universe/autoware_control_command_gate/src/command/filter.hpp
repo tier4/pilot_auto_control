@@ -59,7 +59,7 @@ private:
   double steer_angle_rate_clip_integral_ = 0.0;
   double steer_rotation_rate_clip_integral_ = 0.0;
   std::unique_ptr<ClipDiag> clip_diag_;
-  rclcpp::Publisher<Float32MultiArrayStamped>::SharedPtr debug_pub_;
+  AUTOWARE_PUBLISHER_PTR(Float32MultiArrayStamped) debug_pub_;
 };
 
 }  // namespace autoware::control_command_gate
