@@ -4,6 +4,8 @@ project(autoware_control_validator)
 find_package(autoware_cmake REQUIRED)
 autoware_package()
 
+find_package(PCL REQUIRED COMPONENTS common filters segmentation search)
+
 generate_parameter_library(control_validator_parameters
   param/control_validator_parameters.yaml
 )
@@ -18,10 +20,18 @@ autoware_agnocast_wrapper_setup(autoware_control_validator_helpers)
 ament_auto_add_library(autoware_control_validator_component SHARED
   include/autoware/control_validator/control_validator.hpp
   src/control_validator.cpp
+  src/collision_validator/collision_validator.cpp
+  src/collision_validator/collision_evaluator.cpp
+  src/collision_validator/pointcloud_preprocessor.cpp
+  src/hazard_warning/hazard_warning.cpp
+)
+target_include_directories(autoware_control_validator_component
+  SYSTEM PUBLIC ${PCL_INCLUDE_DIRS}
 )
 target_link_libraries(autoware_control_validator_component
   autoware_control_validator_helpers
   control_validator_parameters
+  ${PCL_LIBRARIES}
 )
 # generate_parameter_library pulls in parameter_traits, which uses deprecated symbols.
 target_compile_options(autoware_control_validator_component PUBLIC
@@ -37,7 +47,9 @@ autoware_agnocast_wrapper_register_node(autoware_control_validator_component
 rosidl_generate_interfaces(
   ${PROJECT_NAME}
   "msg/ControlValidatorStatus.msg"
-  DEPENDENCIES builtin_interfaces
+  "msg/HazardAlert.msg"
+  "msg/HazardSector.msg"
+  DEPENDENCIES builtin_interfaces std_msgs
 )
 
 # to use a message defined in the same package
