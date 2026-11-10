@@ -440,7 +440,8 @@ double calcAverageCurvature(const MPCTrajectory & traj, const double min_baselin
   while (end_chord_front > 0 && total - arc_length[end_chord_front] < min_baseline_m) {
     --end_chord_front;
   }
-  if (total - arc_length[end_chord_front] < min_baseline_m || start_chord_back > end_chord_front) return 0.0;
+  if (total - arc_length[end_chord_front] < min_baseline_m || start_chord_back > end_chord_front)
+    return 0.0;
 
   const double start_dx = traj.x[start_chord_back] - traj.x.front();
   const double start_dy = traj.y[start_chord_back] - traj.y.front();
