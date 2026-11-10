@@ -9,7 +9,7 @@ on:
       # Why is it a JSON string?
       # https://github.com/orgs/community/discussions/11692#discussioncomment-3541856
       runner:
-        default: ubuntu-22.04-m
+        default: ubuntu-24.04
         required: false
         type: string
       rosdistro:
@@ -95,17 +95,23 @@ jobs:
           echo "::notice::BUILD_TYPE_CUDA_STATE=$build_type_cuda_state"
         shell: bash
 
-      - name: Prepare build_depends.repos file (main branch)
-        if: ${{ github.event.pull_request.base.ref != 'humble' }}
-        uses: ./.github/actions/combine-repos-action
-        with:
-          base_file: build_depends_humble.repos
-          overlay_file: build_depends_nightly.repos
-          output_file: build_depends.repos
+      - name: Clone dependency packages
+        run: |
+          mkdir -p dependency_ws
+          vcs import --recursive dependency_ws < build_depends_humble.repos
+        shell: bash
 
-      - name: Prepare build_depends.repos file (humble branch)
-        if: ${{ github.event.pull_request.base.ref == 'humble' }}
-        run: cp build_depends_humble.repos build_depends.repos
+      - name: Remove dependency packages provided by this repository
+        # build_depends_humble.repos clones the whole autoware_core, which has the same packages as core/.
+        # colcon fails on duplicate package names, so keep the ones in this repository.
+        run: |
+          own=$(colcon list --names-only --base-paths core universe)
+          colcon list --base-paths dependency_ws | while read -r name path _; do
+            if grep -qx "$name" <<< "$own"; then
+              echo "Remove ${path} (${name})"
+              rm -rf "${path}"
+            fi
+          done
         shell: bash
 
       - name: Build
@@ -114,7 +120,6 @@ jobs:
         with:
           rosdistro: ${{ inputs.rosdistro }}
           target-packages: ${{ steps.get-modified-packages.outputs.modified-packages }}
-          build-depends-repos: build_depends.repos
           cache-key-element: ${{ env.BUILD_TYPE_CUDA_STATE }}
           build-pre-command: ${{ inputs.build-pre-command }}
       - name: Show ccache stats after build
@@ -128,7 +133,6 @@ jobs:
         with:
           rosdistro: ${{ inputs.rosdistro }}
           target-packages: ${{ steps.get-modified-packages.outputs.modified-packages }}
-          build-depends-repos: build_depends.repos
 
       - name: Show disk space after the tasks
         run: df -h
