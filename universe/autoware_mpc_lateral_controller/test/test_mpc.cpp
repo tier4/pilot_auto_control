@@ -482,7 +482,8 @@ TEST_F(MPCTest, MultiSolveWithBuffer)
 
 TEST_F(MPCTest, PassthroughPredictionStartsAtEgoAndIncludesRateAndActuatorDelay)
 {
-  auto node = rclcpp::Node("mpc_passthrough_prediction_test_node", rclcpp::NodeOptions{});
+  auto node =
+    autoware::agnocast_wrapper::Node("mpc_passthrough_prediction_test_node", rclcpp::NodeOptions{});
   auto mpc = std::make_unique<MPC>(node);
   mpc->setClock(node.get_clock());
   mpc->setVehicleModel(std::make_shared<KinematicsBicycleModel>(wheelbase, steer_limit, steer_tau));
@@ -538,7 +539,8 @@ TEST_F(MPCTest, PassthroughPredictionStartsAtEgoAndIncludesRateAndActuatorDelay)
 
 TEST_F(MPCTest, SyncingPassthroughFilterPreservesDelayAndRawCommandHistory)
 {
-  auto node = rclcpp::Node("mpc_passthrough_filter_test_node", rclcpp::NodeOptions{});
+  auto node =
+    autoware::agnocast_wrapper::Node("mpc_passthrough_filter_test_node", rclcpp::NodeOptions{});
   auto mpc = std::make_unique<MPC>(node);
   mpc->setVehicleModel(std::make_shared<KinematicsBicycleModel>(wheelbase, steer_limit, steer_tau));
   mpc->setQPSolver(std::make_shared<QPSolverEigenLeastSquareLLT>());
