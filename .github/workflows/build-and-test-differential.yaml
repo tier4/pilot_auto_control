@@ -39,7 +39,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     container:
       image: ${{ inputs.container }}${{ inputs.container-suffix }}
-      options: --cap-add=NET_ADMIN # to enable multicast on lo
+      options: --cap-add=NET_ADMIN
     steps:
       - name: Set PR fetch depth
         run: echo "PR_FETCH_DEPTH=$(( ${{ github.event.pull_request.commits }} + 1 ))" >> "${GITHUB_ENV}"
@@ -51,8 +51,6 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: ${{ env.PR_FETCH_DEPTH }}
 
-      # GitHub Actions overrides the image entrypoint, so apply the DDS settings it would have done.
-      # Same as .github/actions/tune-dds-network in autowarefoundation/autoware_universe.
       - name: Enable multicast on loopback
         run: |
           if ip link set lo multicast on; then
@@ -63,7 +61,6 @@ jobs:
         shell: bash
 
       - name: Relax CycloneDDS receive buffer requirement
-        # The image's cyclonedds.xml requires a 10MB socket receive buffer, which hosted runners cannot provide.
         run: |
           if [ -f /home/aw/cyclonedds.xml ]; then
             sed -i 's|min="10MB"|min="default"|' /home/aw/cyclonedds.xml
