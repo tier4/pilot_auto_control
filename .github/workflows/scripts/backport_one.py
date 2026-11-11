@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# cspell: ignore worktrees
 """
 Check that a pull request cherry-picks onto one base branch.
 
