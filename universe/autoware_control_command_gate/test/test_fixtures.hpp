@@ -69,14 +69,14 @@ inline bool spin_until(
   return true;
 }
 
-inline bool reached_time(const rclcpp::Node & node, const double t)
+inline bool reached_time(const autoware::agnocast_wrapper::Node & node, const double t)
 {
   return node.now().nanoseconds() == static_cast<int64_t>(std::llround(t * 1e9));
 }
 
 inline bool publish_clock_until_reached(
   rclcpp::Executor & executor, rclcpp::Publisher<rosgraph_msgs::msg::Clock> & publisher,
-  const rclcpp::Node & node, const double t)
+  const autoware::agnocast_wrapper::Node & node, const double t)
 {
   for (int i = 0; i < 100; ++i) {
     publisher.publish(make_clock(t));
@@ -114,24 +114,27 @@ public:
       rclcpp::Parameter("enable_steer_accel_limit", true),
       rclcpp::Parameter("stop_check_duration", 1.0),
     });
-    node_ = std::make_shared<rclcpp::Node>("command_filter_test", options);
-    pub_clock_ = node_->create_publisher<rosgraph_msgs::msg::Clock>("/clock", rclcpp::ClockQoS());
-    pub_kinematics_ = node_->create_publisher<Odometry>("/localization/kinematic_state", 1);
+    node_ = std::make_shared<autoware::agnocast_wrapper::Node>("command_filter_test", options);
+    const auto rclcpp_node = node_->get_rclcpp_node();
+    pub_clock_ =
+      rclcpp_node->create_publisher<rosgraph_msgs::msg::Clock>("/clock", rclcpp::ClockQoS());
+    pub_kinematics_ = rclcpp_node->create_publisher<Odometry>("/localization/kinematic_state", 1);
     pub_acceleration_ =
-      node_->create_publisher<AccelWithCovarianceStamped>("/localization/acceleration", 1);
-    pub_steering_ = node_->create_publisher<SteeringReport>("/vehicle/status/steering_status", 1);
+      rclcpp_node->create_publisher<AccelWithCovarianceStamped>("/localization/acceleration", 1);
+    pub_steering_ =
+      rclcpp_node->create_publisher<SteeringReport>("/vehicle/status/steering_status", 1);
     pub_control_mode_ =
-      node_->create_publisher<ControlModeReport>("/vehicle/status/control_mode", 1);
+      rclcpp_node->create_publisher<ControlModeReport>("/vehicle/status/control_mode", 1);
 
     auto output = std::make_unique<RecordingOutput>();
     output_ = output.get();
     filter_ = std::make_unique<CommandFilter>(std::move(output), *node_);
     filter_->set_nominal_filter_params(nominal);
     filter_->set_transition_filter_params(transition);
-    executor_.add_node(node_);
+    executor_.add_node(node_->get_node_base_interface());
   }
 
-  ~FilterFixture() { executor_.remove_node(node_); }
+  ~FilterFixture() { executor_.remove_node(node_->get_node_base_interface()); }
 
   bool set_time(const double t)
   {
@@ -178,7 +181,7 @@ public:
 
 private:
   ClipDiag * diag_ = nullptr;
-  rclcpp::Node::SharedPtr node_;
+  std::shared_ptr<autoware::agnocast_wrapper::Node> node_;
   rclcpp::executors::SingleThreadedExecutor executor_;
   rclcpp::Publisher<rosgraph_msgs::msg::Clock>::SharedPtr pub_clock_;
   rclcpp::Publisher<Odometry>::SharedPtr pub_kinematics_;
