@@ -330,14 +330,14 @@ TEST_F(UncrossableBoundDepartureValidatorTest, ValidWhenMapIsUnavailable)
   ControlValidatorStatus res;
   validator.validate(res, trajectory, odometry, acceleration, nullptr, vehicle_info_, markers);
 
-  EXPECT_TRUE(res.will_cross_uncrossable_bound);
+  EXPECT_FALSE(res.will_cross_uncrossable_bound);
 }
 
 TEST_F(UncrossableBoundDepartureValidatorTest, ValidWhenTrajectoryTooShort)
 {
   UncrossableBoundDepartureValidator validator(node_->get_logger(), params_);
-  Trajectory trajectory;
-  trajectory.points.emplace_back(TrajectoryPoint{});
+  auto trajectory = make_trajectory(0.0, -2.5, 10.0, 0.0);
+  trajectory.points.resize(1);
   const auto odometry = make_odometry(trajectory, 10.0, 0.0);
   geometry_msgs::msg::AccelWithCovarianceStamped acceleration;
   visualization_msgs::msg::MarkerArray markers;
@@ -346,7 +346,7 @@ TEST_F(UncrossableBoundDepartureValidatorTest, ValidWhenTrajectoryTooShort)
   validator.validate(
     res, trajectory, odometry, acceleration, make_road_border_map(), vehicle_info_, markers);
 
-  EXPECT_TRUE(res.will_cross_uncrossable_bound);
+  EXPECT_FALSE(res.will_cross_uncrossable_bound);
 }
 
 TEST_F(UncrossableBoundDepartureValidatorTest, ValidWhenTrajectoryParallelToBoundary)
@@ -362,7 +362,7 @@ TEST_F(UncrossableBoundDepartureValidatorTest, ValidWhenTrajectoryParallelToBoun
     res, trajectory, make_odometry(trajectory, 10.0, 0.0), acceleration, map, vehicle_info_,
     markers);
 
-  EXPECT_TRUE(res.will_cross_uncrossable_bound);
+  EXPECT_FALSE(res.will_cross_uncrossable_bound);
 }
 
 TEST_F(UncrossableBoundDepartureValidatorTest, InvalidWhenTrajectoryDepartsBoundary)
@@ -379,7 +379,7 @@ TEST_F(UncrossableBoundDepartureValidatorTest, InvalidWhenTrajectoryDepartsBound
   validator.validate(
     res, safe_trajectory, make_odometry(safe_trajectory, 10.0, 0.0), acceleration, map,
     vehicle_info_, markers);
-  EXPECT_TRUE(res.will_cross_uncrossable_bound);
+  EXPECT_FALSE(res.will_cross_uncrossable_bound);
 
   const auto danger_trajectory = make_trajectory(0.0, -2.5, 10.0, 0.2);
   for (double time_s = 0.1; time_s <= 0.6; time_s += 0.1) {
@@ -388,7 +388,7 @@ TEST_F(UncrossableBoundDepartureValidatorTest, InvalidWhenTrajectoryDepartsBound
       vehicle_info_, markers);
   }
 
-  EXPECT_FALSE(res.will_cross_uncrossable_bound);
+  EXPECT_TRUE(res.will_cross_uncrossable_bound);
   EXPECT_FALSE(markers.markers.empty());
 }
 
