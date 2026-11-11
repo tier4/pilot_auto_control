@@ -9,12 +9,13 @@ here instead of being written out again in a workflow.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
+from dataclasses import field
 import datetime as dt
 import json
 import os
 import sys
 import tempfile
-from dataclasses import dataclass, field
 from typing import Any
 
 import yaml

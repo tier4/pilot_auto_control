@@ -47,7 +47,6 @@ sources:
       - pattern: '#(\d+)'
         replacement: autowarefoundation/autoware_core#\1
 
-
   tier4_universe_e2e:
     upstream: https://github.com/tier4/autoware_universe.git
     ref: feat/v0.64/e2e_scenario_pass

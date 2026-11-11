@@ -28,8 +28,9 @@ import subprocess
 import sys
 
 import combine_history
+from combine_history import CombineError
+from combine_history import MemberSpec
 import sync_config
-from combine_history import CombineError, MemberSpec
 from sync_config import ConfigError
 
 

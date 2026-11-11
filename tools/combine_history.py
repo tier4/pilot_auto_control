@@ -19,9 +19,9 @@ are replayed from scratch (first publish).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import heapq
 import subprocess
-from dataclasses import dataclass
 
 # git stores directory entries as "40000"; fast-import wants the padded form.
 _TREE_MODE = b"40000"
@@ -199,9 +199,7 @@ def _member_names(entries: list[tuple[bytes, bytes, bytes]]) -> set[bytes]:
     return {path for _, _, path in entries}
 
 
-def _composed_tree(
-    repo: str, current: list[list[tuple[bytes, bytes, bytes]] | None]
-) -> str:
+def _composed_tree(repo: str, current: list[list[tuple[bytes, bytes, bytes]] | None]) -> str:
     """Build the tree oid that the current member states would publish.
 
     Uses fast-import so the result matches the trees produced by `combine`.
@@ -229,9 +227,7 @@ def _fingerprint(
     current: list[list[tuple[bytes, bytes, bytes]] | None],
 ) -> frozenset[tuple[bytes, bytes]]:
     """Path → oid pairs the current member states would publish."""
-    return frozenset(
-        (path, oid) for group in current if group for _mode, oid, path in group
-    )
+    return frozenset((path, oid) for group in current if group for _mode, oid, path in group)
 
 
 def _tree_fingerprint(repo: str, tree: str, paths: set[bytes]) -> frozenset[tuple[bytes, bytes]]:
@@ -280,7 +276,7 @@ def _plan_replay(
 def _entries_match_tree(
     repo: str, tip_tree: str, entries: list[tuple[bytes, bytes, bytes]]
 ) -> bool:
-    """True when every renamed path in `entries` has the same oid on `tip_tree`."""
+    """Return whether every renamed path in `entries` has the same oid on `tip_tree`."""
     for _mode, oid, path in entries:
         result = subprocess.run(
             [
@@ -359,8 +355,7 @@ def _resume_after(
     tip_paths = {path for path, _oid in tip_fp}
 
     positions = [
-        _member_resume_index(repo, tip_tree, states[index], tip_paths)
-        for index in range(n_members)
+        _member_resume_index(repo, tip_tree, states[index], tip_paths) for index in range(n_members)
     ]
 
     current: list[list[tuple[bytes, bytes, bytes]] | None] = [
@@ -483,9 +478,7 @@ def combine(
     return _git(repo, "rev-parse", f"refs/heads/{branch}").decode().strip()
 
 
-def expected_tip_tree(
-    repo: str, members: list[MemberSpec], order_by: str
-) -> str:
+def expected_tip_tree(repo: str, members: list[MemberSpec], order_by: str) -> str:
     """Return the tree oid the combined tip must have for the current members.
 
     Used by `--verify` to check content without requiring commit-id identity.

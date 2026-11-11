@@ -19,27 +19,27 @@ mapfile -t SOURCES < <(tools/mirror.py list-sources | python3 -c 'import json,sy
 mapfile -t COMBINED < <(tools/mirror.py list-combined | python3 -c 'import json,sys; print("\n".join(json.load(sys.stdin)))')
 
 push_flag=()
-if [[ "$PUSH" == "1" ]]; then
-  push_flag=(--push)
-  echo "==> live sync (will push to $DOWNSTREAM)"
+if [[ $PUSH == "1" ]]; then
+    push_flag=(--push)
+    echo "==> live sync (will push to $DOWNSTREAM)"
 else
-  echo "==> dry run (no push)"
+    echo "==> dry run (no push)"
 fi
 
 for source in "${SOURCES[@]}"; do
-  echo
-  echo "==> mirror $source"
-  tools/mirror.py mirror "$source" --work "$WORK/mirror" --downstream "$DOWNSTREAM" "${push_flag[@]+"${push_flag[@]}"}"
+    echo
+    echo "==> mirror $source"
+    tools/mirror.py mirror "$source" --work "$WORK/mirror" --downstream "$DOWNSTREAM" "${push_flag[@]+"${push_flag[@]}"}"
 done
 
 for target in "${COMBINED[@]}"; do
-  echo
-  echo "==> combine $target"
-  if [[ "$PUSH" == "1" ]]; then
-    tools/mirror.py combine "$target" --work "$WORK/combine" --downstream "$DOWNSTREAM" --verify --push
-  else
-    tools/mirror.py combine "$target" --work "$WORK/combine" --downstream "$DOWNSTREAM" --verify --allow-missing-members
-  fi
+    echo
+    echo "==> combine $target"
+    if [[ $PUSH == "1" ]]; then
+        tools/mirror.py combine "$target" --work "$WORK/combine" --downstream "$DOWNSTREAM" --verify --push
+    else
+        tools/mirror.py combine "$target" --work "$WORK/combine" --downstream "$DOWNSTREAM" --verify --allow-missing-members
+    fi
 done
 
 echo
