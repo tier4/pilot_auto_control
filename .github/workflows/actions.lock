@@ -8,6 +8,9 @@ workflows:
         - 'actions/checkout@v4.4.0'
         - 'autowarefoundation/autoware-github-actions@v1.69.2'
     '.github/workflows/build-test-tidy-pr.yaml': []
+    '.github/workflows/dco.yaml':
+        - 'actions/checkout@v4.4.0'
+        - 'actions/setup-python@v5.6.0'
     '.github/workflows/pre-commit-lite.yaml':
         - 'actions/checkout@v4.4.0'
         - 'actions/setup-python@v5.6.0'
