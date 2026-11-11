@@ -86,7 +86,7 @@ tools/mirror.py combine awf-combined-latest \
     --work /tmp/mirror --downstream https://github.com/OWNER/REPO.git --verify
 ```
 
-Without `--push`, both subcommands are dry runs.
+Without `--push`, both subcommands are dry runs and push nothing.
 
 ### Manual sync
 
