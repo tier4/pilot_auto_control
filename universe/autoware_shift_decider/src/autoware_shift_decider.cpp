@@ -14,6 +14,7 @@
 
 #include "autoware/shift_decider/autoware_shift_decider.hpp"
 
+// CI check: this comment is for testing the CI and has a mispelled word on purpose.
 #include <rclcpp/timer.hpp>
 
 #include <cstddef>

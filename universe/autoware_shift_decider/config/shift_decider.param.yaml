@@ -1,3 +1,4 @@
+# CI check: this comment is for testing json-schema-check.
 /**:
   ros__parameters:
     park_on_goal: true
