@@ -11,6 +11,10 @@ workflows:
     '.github/workflows/dco.yaml':
         - 'actions/checkout@v4.4.0'
         - 'actions/setup-python@v5.6.0'
+    '.github/workflows/mirror.yaml':
+        - 'actions/checkout@v4.4.0'
+        - 'actions/create-github-app-token@v3.3.0'
+        - 'autowarefoundation/autoware-github-actions@v1.69.1'
     '.github/workflows/pre-commit-lite.yaml':
         - 'actions/checkout@v4.4.0'
         - 'actions/setup-python@v5.6.0'
@@ -44,6 +48,11 @@ dependencies:
         commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1'
         owner_id: 44036562
         repo_id: 197814629
+    'actions/create-github-app-token@v3.3.0':
+        ref: 'v3.3.0'
+        commit: 'sha1-64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
+        owner_id: 44036562
+        repo_id: 642580244
     'actions/setup-python@v5.6.0':
         ref: 'v5.6.0'
         commit: 'sha1-a26af69be951a213d495a4c3e4e4022e16d87065'
@@ -52,6 +61,11 @@ dependencies:
     'autowarefoundation/autoware-github-actions@v1':
         ref: 'v1'
         commit: 'sha1-50eb3f9ec8b6350422280d1c65e6f6cb0fafabbb'
+        owner_id: 48420599
+        repo_id: 429694607
+    'autowarefoundation/autoware-github-actions@v1.69.1':
+        ref: 'v1.69.1'
+        commit: 'sha1-3419182c5e20616d2ca4c81c73ef94199eb26172'
         owner_id: 48420599
         repo_id: 429694607
     'autowarefoundation/autoware-github-actions@v1.69.2':
