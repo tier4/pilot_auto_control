@@ -139,9 +139,9 @@ jobs:
         run: du -sh ${CCACHE_DIR} && ccache -s
         shell: bash
 
-      - name: Add agnocastlib to the library path for tests
+      - name: Add workspace libraries to the library path for tests
         if: ${{ inputs.enable-agnocast }}
-        run: echo "LD_LIBRARY_PATH=${PWD}/install/agnocastlib/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+        run: echo "LD_LIBRARY_PATH=$(ls -d "${PWD}"/install/*/lib | paste -sd:)${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
         shell: bash
 
       - name: Test
