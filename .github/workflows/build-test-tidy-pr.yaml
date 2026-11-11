@@ -16,3 +16,9 @@ jobs:
     uses: ./.github/workflows/build-and-test-differential.yaml
     with:
       container: ghcr.io/autowarefoundation/autoware:universe-devel-jazzy
+
+  build-and-test-differential-agnocast:
+    uses: ./.github/workflows/build-and-test-differential.yaml
+    with:
+      container: ghcr.io/autowarefoundation/autoware:universe-devel-jazzy
+      enable-agnocast: true
