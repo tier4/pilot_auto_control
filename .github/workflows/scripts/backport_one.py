@@ -70,6 +70,28 @@ def cherry_pick_options() -> list[str]:
     return ["-x", "-s", MERGE_SHA]
 
 
+def original_author() -> str:
+    """Return the author of the merged commit as "Name <email>", or "" if it is unknown."""
+    try:
+        return git("log", "-1", "--format=%an <%ae>", MERGE_SHA).strip()
+    except subprocess.CalledProcessError:
+        return ""
+
+
+def reset_author_command() -> str:
+    """Make the person who runs the commands the author of the backport commit.
+
+    A cherry-pick keeps the author of the merged commit, whose email (set by GitHub on
+    squash merge) does not always match any Signed-off-by line, so DCO would fail. The
+    original author is kept as a Co-authored-by trailer.
+    """
+    command = "git commit --amend --no-edit --reset-author"
+    author = original_author()
+    if author:
+        command += " --trailer " + shlex.quote(f"Co-authored-by: {author}")
+    return command
+
+
 def backport_title() -> str:
     return f"{PR_TITLE} (backport #{PR_NUMBER})"
 
@@ -110,6 +132,7 @@ def local_commands(base: str, head: str) -> str:
         'git config user.email "${GH_ID}+${GH_LOGIN}@users.noreply.github.com"',
         "git switch --create " + shlex.quote(head),
         cherry_pick,
+        reset_author_command(),
         "git push --set-upstream origin HEAD",
         "gh pr create --repo "
         + shlex.quote(REPO)
@@ -168,6 +191,8 @@ def failure_comment(base: str, head: str, error: str) -> str:
             f"git switch --create {head}",
             "# Cherry-pick the merged commit of this pull request and resolve the conflicts",
             f"git cherry-pick -x -s --mainline 1 {MERGE_SHA}",
+            "# After `git cherry-pick --continue`, make yourself the author so that DCO passes",
+            reset_author_command(),
             "# Push it to GitHub",
             f"git push --set-upstream origin {head}",
             "# Go back to the original working tree",
