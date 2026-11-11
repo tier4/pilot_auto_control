@@ -66,7 +66,7 @@ The combined branch is the pure function
 
 - Member commits not yet reflected in the published tip are appended onto it.
   The resume point is recovered from the tip tree (each member's renamed
-  subtree oids). No sidecar ref is required.
+  subtree object IDs). No sidecar ref is required.
 - Same published tip plus same member tips always yield the same commit ids, so
   the push is a fast-forward (or unchanged).
 - `tools/mirror.py combine --verify` checks that the tip tree matches what the
