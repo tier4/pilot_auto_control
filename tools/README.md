@@ -4,6 +4,8 @@ This repository split mirrors the control subtrees of several upstream repositor
 
 The mirror configuration and its tooling live in `tools/`, `.sync/` and `.github/workflows/mirror.yaml` of the `dev` branch. See the mirror branches for source code.
 
+The `mirror` workflow is currently disabled. It pushes with a GitHub App token, and the App private key has to be set up through the shared KMS before the workflow can be enabled again.
+
 ### Published branches
 
 | Branch                              | Contents                                                                                                            |
