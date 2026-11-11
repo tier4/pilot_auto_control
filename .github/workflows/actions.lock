@@ -30,6 +30,7 @@ workflows:
     '.github/workflows/pre-commit-optional.yaml':
         - 'actions/checkout@v4.4.0'
         - 'autowarefoundation/autoware-github-actions@v1.69.2'
+    '.github/workflows/semantic-pull-request.yaml': []
     '.github/workflows/spell-check-differential.yaml':
         - 'actions/checkout@v4.4.0'
         - 'autowarefoundation/autoware-github-actions@v1.69.2'
