@@ -5,7 +5,12 @@ version: 'v0.0.3'
 workflows:
     '.github/workflows/backport.yaml':
         - 'actions/checkout@v4.4.0'
+    '.github/workflows/build-and-test-daily.yaml': []
     '.github/workflows/build-and-test-differential.yaml':
+        - 'actions/cache@v4.3.0'
+        - 'actions/checkout@v4.4.0'
+        - 'autowarefoundation/autoware-github-actions@v1.69.2'
+    '.github/workflows/build-and-test-reusable.yaml':
         - 'actions/cache@v4.3.0'
         - 'actions/checkout@v4.4.0'
         - 'autowarefoundation/autoware-github-actions@v1.69.2'
