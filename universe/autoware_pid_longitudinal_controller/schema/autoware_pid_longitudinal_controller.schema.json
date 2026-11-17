@@ -330,6 +330,46 @@
           "type": "number",
           "description": "min value of estimated pitch [rad]",
           "default": "-0.1"
+        },
+        "enable_stopping_scene_accel_bias": {
+          "type": "boolean",
+          "description": "enable the stopping-scene acceleration bias. While false the command is unchanged.",
+          "default": "false"
+        },
+        "stopping_scene_velocity_min": {
+          "type": "number",
+          "description": "scene requires ego longitudinal speed above this value [m/s]",
+          "default": "0.1"
+        },
+        "stopping_scene_velocity_max": {
+          "type": "number",
+          "description": "scene requires ego longitudinal speed below this value [m/s]",
+          "default": "3.0"
+        },
+        "stopping_scene_end_velocity_max": {
+          "type": "number",
+          "description": "scene requires the trajectory endpoint speed below this value and below ego speed [m/s]",
+          "default": "0.2"
+        },
+        "stopping_scene_bias_min": {
+          "type": "number",
+          "description": "most negative bias added to the command [m/s^2]",
+          "default": "-0.5"
+        },
+        "stopping_scene_sample_weight": {
+          "type": "number",
+          "description": "weight of the new acceleration error in the bias filter [-]",
+          "default": "0.1"
+        },
+        "stopping_scene_command_delay": {
+          "type": "number",
+          "description": "delay of the published-acceleration buffer used as the command reference [s]",
+          "default": "0.3"
+        },
+        "stopping_scene_nearest_dist": {
+          "type": "number",
+          "description": "maximum distance from ego to the current trajectory point [m]",
+          "default": "10.0"
         }
       },
       "required": [
@@ -392,7 +432,15 @@
         "slope_source",
         "adaptive_trajectory_velocity_th",
         "max_pitch_rad",
-        "min_pitch_rad"
+        "min_pitch_rad",
+        "enable_stopping_scene_accel_bias",
+        "stopping_scene_velocity_min",
+        "stopping_scene_velocity_max",
+        "stopping_scene_end_velocity_max",
+        "stopping_scene_bias_min",
+        "stopping_scene_sample_weight",
+        "stopping_scene_command_delay",
+        "stopping_scene_nearest_dist"
       ],
       "additionalProperties": false
     }
