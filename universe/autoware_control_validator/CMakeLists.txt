@@ -47,8 +47,6 @@ autoware_agnocast_wrapper_register_node(autoware_control_validator_component
 rosidl_generate_interfaces(
   ${PROJECT_NAME}
   "msg/ControlValidatorStatus.msg"
-  "msg/HazardAlert.msg"
-  "msg/HazardSector.msg"
   DEPENDENCIES builtin_interfaces std_msgs
 )
 
