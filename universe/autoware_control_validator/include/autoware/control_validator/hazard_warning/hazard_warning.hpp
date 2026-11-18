@@ -61,7 +61,7 @@ public:
    */
   HazardWarning(
     const rclcpp::Logger & logger, const ::control_validator::Params & params,
-    AUTOWARE_PUBLISHER_PTR(visualization_msgs::msg::MarkerArray) pub_markers = nullptr,
+    const AUTOWARE_PUBLISHER_PTR(visualization_msgs::msg::MarkerArray) & pub_markers = nullptr,
     std::shared_ptr<autoware_utils_debug::TimeKeeper> time_keeper =
       std::make_shared<autoware_utils_debug::TimeKeeper>());
 

@@ -209,9 +209,9 @@ Marker make_risk_level_marker(
 
 HazardWarning::HazardWarning(
   const rclcpp::Logger & logger, const ::control_validator::Params & params,
-  AUTOWARE_PUBLISHER_PTR(MarkerArray) pub_markers,
+  const AUTOWARE_PUBLISHER_PTR(MarkerArray) & pub_markers,
   std::shared_ptr<autoware_utils_debug::TimeKeeper> time_keeper)
-: logger_(logger), time_keeper_(std::move(time_keeper)), pub_markers_(std::move(pub_markers))
+: logger_(logger), time_keeper_(std::move(time_keeper)), pub_markers_(pub_markers)
 {
   update_parameters(params);
 }

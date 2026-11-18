@@ -337,7 +337,7 @@ TEST_F(MPCTest, OsqpSteerRateLimitByCurvatureIsSymmetricInTurnDirection)
   // the curvature lookup would throttle one turn direction but not the other.
   const double straight_steer_rate_lim = 0.01;  // [rad/s]
   const auto solve = [&](const Trajectory & trajectory) {
-    auto node = rclcpp::Node("mpc_test_node", rclcpp::NodeOptions{});
+    auto node = autoware::agnocast_wrapper::Node("mpc_test_node", rclcpp::NodeOptions{});
     auto mpc = std::make_unique<MPC>(node);
     initializeMPC(*mpc);
     mpc->m_steer_rate_lim_map_by_curvature = {
