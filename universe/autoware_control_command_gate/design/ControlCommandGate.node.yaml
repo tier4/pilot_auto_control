@@ -1,0 +1,179 @@
+autoware_system_design_format: 0.3.0
+
+# node information
+name: ControlCommandGate.node
+
+package:
+  name: autoware_control_command_gate
+  provider: autoware
+
+launch:
+  plugin: autoware::control_command_gate::ControlCmdGate
+  executable: control_command_gate_node
+
+# interfaces
+subscribers:
+  # one input set per source name in the config
+  - name: inputs/stop/control
+    message_type: autoware_control_msgs/msg/Control
+    remap_target: ~/inputs/stop/control
+  - name: inputs/stop/gear
+    message_type: autoware_vehicle_msgs/msg/GearCommand
+    remap_target: ~/inputs/stop/gear
+  - name: inputs/stop/turn_indicators
+    message_type: autoware_vehicle_msgs/msg/TurnIndicatorsCommand
+    remap_target: ~/inputs/stop/turn_indicators
+  - name: inputs/stop/hazard_lights
+    message_type: autoware_vehicle_msgs/msg/HazardLightsCommand
+    remap_target: ~/inputs/stop/hazard_lights
+  - name: inputs/main/control
+    message_type: autoware_control_msgs/msg/Control
+    remap_target: ~/inputs/main/control
+  - name: inputs/main/gear
+    message_type: autoware_vehicle_msgs/msg/GearCommand
+    remap_target: ~/inputs/main/gear
+  - name: inputs/main/turn_indicators
+    message_type: autoware_vehicle_msgs/msg/TurnIndicatorsCommand
+    remap_target: ~/inputs/main/turn_indicators
+  - name: inputs/main/hazard_lights
+    message_type: autoware_vehicle_msgs/msg/HazardLightsCommand
+    remap_target: ~/inputs/main/hazard_lights
+  - name: inputs/local/control
+    message_type: autoware_control_msgs/msg/Control
+    remap_target: ~/inputs/local/control
+  - name: inputs/local/gear
+    message_type: autoware_vehicle_msgs/msg/GearCommand
+    remap_target: ~/inputs/local/gear
+  - name: inputs/local/turn_indicators
+    message_type: autoware_vehicle_msgs/msg/TurnIndicatorsCommand
+    remap_target: ~/inputs/local/turn_indicators
+  - name: inputs/local/hazard_lights
+    message_type: autoware_vehicle_msgs/msg/HazardLightsCommand
+    remap_target: ~/inputs/local/hazard_lights
+  - name: inputs/remote/control
+    message_type: autoware_control_msgs/msg/Control
+    remap_target: ~/inputs/remote/control
+  - name: inputs/remote/gear
+    message_type: autoware_vehicle_msgs/msg/GearCommand
+    remap_target: ~/inputs/remote/gear
+  - name: inputs/remote/turn_indicators
+    message_type: autoware_vehicle_msgs/msg/TurnIndicatorsCommand
+    remap_target: ~/inputs/remote/turn_indicators
+  - name: inputs/remote/hazard_lights
+    message_type: autoware_vehicle_msgs/msg/HazardLightsCommand
+    remap_target: ~/inputs/remote/hazard_lights
+  - name: inputs/emergency_stop/control
+    message_type: autoware_control_msgs/msg/Control
+    remap_target: ~/inputs/emergency_stop/control
+  - name: inputs/emergency_stop/gear
+    message_type: autoware_vehicle_msgs/msg/GearCommand
+    remap_target: ~/inputs/emergency_stop/gear
+  - name: inputs/emergency_stop/turn_indicators
+    message_type: autoware_vehicle_msgs/msg/TurnIndicatorsCommand
+    remap_target: ~/inputs/emergency_stop/turn_indicators
+  - name: inputs/emergency_stop/hazard_lights
+    message_type: autoware_vehicle_msgs/msg/HazardLightsCommand
+    remap_target: ~/inputs/emergency_stop/hazard_lights
+  # vehicle state for command filters: node-side names are fixed
+  - name: kinematics
+    message_type: nav_msgs/msg/Odometry
+    remap_target: /localization/kinematic_state
+  - name: acceleration
+    message_type: geometry_msgs/msg/AccelWithCovarianceStamped
+    remap_target: /localization/acceleration
+  - name: steering
+    message_type: autoware_vehicle_msgs/msg/SteeringReport
+    remap_target: /vehicle/status/steering_status
+  - name: control_mode_report
+    message_type: autoware_vehicle_msgs/msg/ControlModeReport
+    remap_target: /vehicle/status/control_mode
+
+publishers:
+  - name: control
+    message_type: autoware_control_msgs/msg/Control
+    remap_target: ~/output/control
+  - name: gear
+    message_type: autoware_vehicle_msgs/msg/GearCommand
+    remap_target: ~/output/gear
+  - name: turn_indicators
+    message_type: autoware_vehicle_msgs/msg/TurnIndicatorsCommand
+    remap_target: ~/output/turn_indicators
+  - name: hazard_lights
+    message_type: autoware_vehicle_msgs/msg/HazardLightsCommand
+    remap_target: ~/output/hazard_lights
+  - name: source/status
+    message_type: tier4_system_msgs/msg/CommandSourceStatus
+    remap_target: ~/source/status
+    qos:
+      reliability: reliable
+      durability: transient_local
+  - name: filter/status
+    message_type: tier4_system_msgs/msg/CommandFilterStatus
+    remap_target: ~/filter/status
+    qos:
+      reliability: reliable
+      durability: transient_local
+  # legacy interfaces: node-side names are fixed
+  - name: is_paused
+    message_type: tier4_control_msgs/msg/IsPaused
+    remap_target: /control/vehicle_cmd_gate/is_paused
+    qos:
+      reliability: reliable
+      durability: transient_local
+  - name: is_start_requested
+    message_type: tier4_control_msgs/msg/IsStartRequested
+    remap_target: /control/vehicle_cmd_gate/is_start_requested
+    qos:
+      reliability: reliable
+      durability: transient_local
+  - name: is_stopped
+    message_type: tier4_control_msgs/msg/IsStopped
+    remap_target: /control/vehicle_cmd_gate/is_stopped
+    qos:
+      reliability: reliable
+      durability: transient_local
+  - name: emergency
+    message_type: tier4_external_api_msgs/msg/Emergency
+    remap_target: /api/autoware/get/emergency
+    qos:
+      reliability: reliable
+      durability: transient_local
+
+servers:
+  - name: source/change
+    message_type: tier4_system_msgs/srv/ChangeCommandSource
+    remap_target: ~/source/change
+  - name: filter/change
+    message_type: tier4_system_msgs/srv/ChangeCommandFilter
+    remap_target: ~/filter/change
+  - name: source/select
+    message_type: tier4_system_msgs/srv/SelectCommandSource
+    remap_target: ~/source/select
+  # legacy interfaces: node-side names are fixed
+  - name: set_pause
+    message_type: tier4_control_msgs/srv/SetPause
+    remap_target: /control/vehicle_cmd_gate/set_pause
+  - name: set_stop
+    message_type: tier4_control_msgs/srv/SetStop
+    remap_target: /control/vehicle_cmd_gate/set_stop
+  - name: set_emergency
+    message_type: tier4_external_api_msgs/srv/SetEmergency
+    remap_target: /api/autoware/set/emergency
+
+# parameters
+param_files:
+  - name: config
+    default: $(find-pkg-share autoware_control_command_gate)/config/default.param.yaml
+
+param_values: []
+
+# processes
+processes:
+  - name: forward_selected_command
+    trigger_conditions:
+      - on_input: inputs/main/control
+    outcomes:
+      - to_output: control
+      - to_output: gear
+      - to_output: turn_indicators
+      - to_output: hazard_lights
