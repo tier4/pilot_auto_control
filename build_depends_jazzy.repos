@@ -39,7 +39,7 @@ repositories:
   autoware/autoware_internal_msgs:
     type: git
     url: https://github.com/autowarefoundation/autoware_internal_msgs.git
-    version: 4144effa727d194554ad78d343683201bbbbc427 # 1.16.0
+    version: fe5ab82dba48e061aba59e9ab9aaaa541dfb1b27 # main (autowarefoundation/autoware_internal_msgs#98)
   middleware/external/agnocast:
     type: git
     url: https://github.com/autowarefoundation/agnocast.git
