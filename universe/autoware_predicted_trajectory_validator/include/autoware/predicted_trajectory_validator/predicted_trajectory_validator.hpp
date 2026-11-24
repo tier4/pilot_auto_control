@@ -19,10 +19,13 @@
 #include "autoware/predicted_trajectory_validator/debug_marker.hpp"
 #include "autoware/predicted_trajectory_validator/hazard_warning/hazard_warning.hpp"
 #include "autoware/predicted_trajectory_validator/uncrossable_bound_departure_validator.hpp"
-#include "autoware_utils/ros/polling_subscriber.hpp"
 #include "autoware_vehicle_info_utils/vehicle_info.hpp"
 #include "diagnostic_updater/diagnostic_updater.hpp"
 
+#include <autoware/agnocast_wrapper/autoware_agnocast_wrapper.hpp>
+#include <autoware/agnocast_wrapper/diagnostic_updater.hpp>
+#include <autoware/agnocast_wrapper/node.hpp>
+#include <autoware/agnocast_wrapper/polling_subscriber.hpp>
 #include <autoware_predicted_trajectory_validator/msg/predicted_trajectory_validator_status.hpp>
 #include <autoware_predicted_trajectory_validator/msg/validation_result.hpp>
 #include <autoware_predicted_trajectory_validator/predicted_trajectory_validator_parameters.hpp>
@@ -68,7 +71,7 @@ using sensor_msgs::msg::PointCloud2;
  * @brief Evaluates the effect of the control predicted trajectory on the surroundings: uncrossable
  * boundary departure, collision and the hazard alert.
  */
-class PredictedTrajectoryValidator : public rclcpp::Node
+class PredictedTrajectoryValidator : public autoware::agnocast_wrapper::Node
 {
 public:
   explicit PredictedTrajectoryValidator(const rclcpp::NodeOptions & options);
@@ -77,7 +80,7 @@ public:
    * @brief Callback running one validation cycle per predicted trajectory.
    * @param msg Predicted trajectory of the controller
    */
-  void on_predicted_trajectory(const Trajectory::ConstSharedPtr msg);
+  void on_predicted_trajectory(const AUTOWARE_MESSAGE_CONST_SHARED_PTR(Trajectory) & msg);
 
   /**
    * @brief Callback storing the lanelet map used by the boundary departure check.
@@ -118,24 +121,23 @@ private:
   PredictedTrajectoryValidatorStatus to_msg() const;
 
   // Subscribers and publishers
-  rclcpp::Subscription<Trajectory>::SharedPtr sub_predicted_traj_;
-  autoware_utils::InterProcessPollingSubscriber<OperationModeState>::SharedPtr
+  AUTOWARE_SUBSCRIPTION_PTR(Trajectory) sub_predicted_traj_;
+  autoware::agnocast_wrapper::polling::PollingSubscriber<OperationModeState>::SharedPtr
     sub_operational_state_;
-  autoware_utils::InterProcessPollingSubscriber<Odometry>::SharedPtr sub_kinematics_;
-  autoware_utils::InterProcessPollingSubscriber<AccelWithCovarianceStamped>::SharedPtr
+  autoware::agnocast_wrapper::polling::PollingSubscriber<Odometry>::SharedPtr sub_kinematics_;
+  autoware::agnocast_wrapper::polling::PollingSubscriber<AccelWithCovarianceStamped>::SharedPtr
     sub_measured_acc_;
-  rclcpp::Subscription<LaneletMapBin>::SharedPtr sub_lanelet_map_;
-  autoware_utils::InterProcessPollingSubscriber<PredictedObjects>::SharedPtr sub_objects_;
-  autoware_utils::InterProcessPollingSubscriber<PointCloud2>::SharedPtr sub_pointcloud_;
-  rclcpp::Publisher<PredictedTrajectoryValidatorStatus>::SharedPtr pub_status_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_markers_;
-  rclcpp::Publisher<autoware_internal_debug_msgs::msg::Float64Stamped>::SharedPtr
-    pub_processing_time_;
-  rclcpp::Publisher<HazardAlert>::SharedPtr pub_hazard_alert_;
-  rclcpp::Publisher<autoware_internal_debug_msgs::msg::Float64Stamped>::SharedPtr
-    pub_hazard_processing_time_;
-  rclcpp::Publisher<autoware_utils_debug::ProcessingTimeDetail>::SharedPtr
-    pub_hazard_processing_time_detail_;
+  AUTOWARE_SUBSCRIPTION_PTR(LaneletMapBin) sub_lanelet_map_;
+  autoware::agnocast_wrapper::polling::PollingSubscriber<PredictedObjects>::SharedPtr sub_objects_;
+  autoware::agnocast_wrapper::polling::PollingSubscriber<PointCloud2>::SharedPtr sub_pointcloud_;
+  AUTOWARE_PUBLISHER_PTR(PredictedTrajectoryValidatorStatus) pub_status_;
+  AUTOWARE_PUBLISHER_PTR(visualization_msgs::msg::MarkerArray) pub_markers_;
+  AUTOWARE_PUBLISHER_PTR(autoware_internal_debug_msgs::msg::Float64Stamped) pub_processing_time_;
+  AUTOWARE_PUBLISHER_PTR(HazardAlert) pub_hazard_alert_;
+  AUTOWARE_PUBLISHER_PTR(autoware_internal_debug_msgs::msg::Float64Stamped)
+  pub_hazard_processing_time_;
+  AUTOWARE_PUBLISHER_PTR(autoware_utils_debug::ProcessingTimeDetail)
+  pub_hazard_processing_time_detail_;
 
   autoware_utils::StopWatch<std::chrono::milliseconds> hazard_stop_watch_;
   std::shared_ptr<autoware_utils_debug::TimeKeeper> hazard_time_keeper_ =
@@ -146,7 +148,7 @@ private:
   ::predicted_trajectory_validator::Params params_;
 
   int64_t diag_error_count_threshold_ = 0;
-  Updater diag_updater_{this};
+  autoware::agnocast_wrapper::diagnostic_updater::Updater diag_updater_{this};
   std::array<ValidationResult, NUM_JUDGMENTS> results_;
   vehicle_info_utils::VehicleInfo vehicle_info_;
   std::shared_ptr<lanelet::LaneletMap> lanelet_map_ptr_;

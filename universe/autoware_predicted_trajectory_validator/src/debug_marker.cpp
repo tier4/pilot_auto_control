@@ -22,7 +22,7 @@
 using visualization_msgs::msg::Marker;
 
 PredictedTrajectoryValidatorDebugMarkerPublisher::PredictedTrajectoryValidatorDebugMarkerPublisher(
-  rclcpp::Node * node)
+  autoware::agnocast_wrapper::Node * node)
 : node_(node)
 {
   virtual_wall_pub_ =

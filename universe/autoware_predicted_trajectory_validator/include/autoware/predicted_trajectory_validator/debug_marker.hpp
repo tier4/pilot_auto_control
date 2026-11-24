@@ -15,6 +15,8 @@
 #ifndef AUTOWARE__PREDICTED_TRAJECTORY_VALIDATOR__DEBUG_MARKER_HPP_
 #define AUTOWARE__PREDICTED_TRAJECTORY_VALIDATOR__DEBUG_MARKER_HPP_
 
+#include <autoware/agnocast_wrapper/autoware_agnocast_wrapper.hpp>
+#include <autoware/agnocast_wrapper/node.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include <autoware_planning_msgs/msg/trajectory.hpp>
@@ -33,7 +35,8 @@ public:
   /**
    * @brief Constructor
    */
-  explicit PredictedTrajectoryValidatorDebugMarkerPublisher(rclcpp::Node * node);
+  explicit PredictedTrajectoryValidatorDebugMarkerPublisher(
+    autoware::agnocast_wrapper::Node * node);
 
   /**
    * @brief Push a virtual wall
@@ -53,9 +56,9 @@ public:
   void clear_markers();
 
 private:
-  rclcpp::Node * node_;
+  autoware::agnocast_wrapper::Node * node_;
   visualization_msgs::msg::MarkerArray marker_array_virtual_wall_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr virtual_wall_pub_;
+  AUTOWARE_PUBLISHER_PTR(visualization_msgs::msg::MarkerArray) virtual_wall_pub_;
   std::map<std::string, int> marker_id_;
 };
 

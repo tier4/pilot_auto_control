@@ -18,6 +18,7 @@
 #include "autoware/predicted_trajectory_validator/hazard_warning/alert_latch.hpp"
 #include "autoware/predicted_trajectory_validator/hazard_warning/hazard_warning_sources.hpp"
 
+#include <autoware/agnocast_wrapper/autoware_agnocast_wrapper.hpp>
 #include <autoware_predicted_trajectory_validator/predicted_trajectory_validator_parameters.hpp>
 #include <autoware_utils_debug/time_keeper.hpp>
 #include <autoware_utils_geometry/boost_geometry.hpp>
@@ -60,7 +61,7 @@ public:
    */
   HazardWarning(
     const rclcpp::Logger & logger, const ::predicted_trajectory_validator::Params & params,
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_markers = nullptr,
+    const AUTOWARE_PUBLISHER_PTR(visualization_msgs::msg::MarkerArray) & pub_markers = nullptr,
     std::shared_ptr<autoware_utils_debug::TimeKeeper> time_keeper =
       std::make_shared<autoware_utils_debug::TimeKeeper>());
 
@@ -95,7 +96,7 @@ private:
   std::array<autoware_utils_geometry::Polygon2d, hazard_warning::kNumSectors> wedges_;
   std::array<hazard_warning::AlertLatch, hazard_warning::kNumSectors> sector_latches_;
   std::array<HazardWarningSources, hazard_warning::kNumSectors> last_on_sources_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_markers_;
+  AUTOWARE_PUBLISHER_PTR(visualization_msgs::msg::MarkerArray) pub_markers_;
 };
 }  // namespace autoware::predicted_trajectory_validator
 

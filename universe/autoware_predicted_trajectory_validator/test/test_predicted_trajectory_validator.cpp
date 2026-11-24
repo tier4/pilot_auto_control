@@ -97,7 +97,7 @@ protected:
   {
     if (executor_) {
       executor_->remove_node(helper_);
-      executor_->remove_node(node_);
+      executor_->remove_node(node_->get_node_base_interface());
     }
     executor_.reset();
     helper_.reset();
@@ -143,7 +143,7 @@ protected:
       [this](const HazardAlert::ConstSharedPtr msg) { alerts_.push_back(*msg); });
 
     executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
-    executor_->add_node(node_);
+    executor_->add_node(node_->get_node_base_interface());
     executor_->add_node(helper_);
     spin_for(std::chrono::milliseconds(300));
   }

@@ -54,22 +54,21 @@ PredictedTrajectoryValidator::PredictedTrajectoryValidator(const rclcpp::NodeOpt
     "~/input/predicted_trajectory", 1,
     std::bind(&PredictedTrajectoryValidator::on_predicted_trajectory, this, _1));
   sub_operational_state_ =
-    autoware_utils::InterProcessPollingSubscriber<OperationModeState>::create_subscription(
+    autoware::agnocast_wrapper::polling::create_polling_subscriber<OperationModeState>(
       this, "~/input/operational_mode_state", 1);
   sub_kinematics_ =
-    autoware_utils::InterProcessPollingSubscriber<nav_msgs::msg::Odometry>::create_subscription(
+    autoware::agnocast_wrapper::polling::create_polling_subscriber<nav_msgs::msg::Odometry>(
       this, "~/input/kinematics", 1);
   sub_measured_acc_ =
-    autoware_utils::InterProcessPollingSubscriber<AccelWithCovarianceStamped>::create_subscription(
+    autoware::agnocast_wrapper::polling::create_polling_subscriber<AccelWithCovarianceStamped>(
       this, "~/input/measured_acceleration", 1);
   sub_lanelet_map_ = create_subscription<LaneletMapBin>(
     "~/input/lanelet2_map", rclcpp::QoS{1}.transient_local(),
     std::bind(&PredictedTrajectoryValidator::on_lanelet_map, this, _1));
-  sub_objects_ =
-    autoware_utils::InterProcessPollingSubscriber<PredictedObjects>::create_subscription(
-      this, "~/input/objects", 1);
-  sub_pointcloud_ = autoware_utils::InterProcessPollingSubscriber<PointCloud2>::create_subscription(
-    this, "~/input/pointcloud", autoware_utils::single_depth_sensor_qos());
+  sub_objects_ = autoware::agnocast_wrapper::polling::create_polling_subscriber<PredictedObjects>(
+    this, "~/input/objects", 1);
+  sub_pointcloud_ = autoware::agnocast_wrapper::polling::create_polling_subscriber<PointCloud2>(
+    this, "~/input/pointcloud", autoware_utils_rclcpp::single_depth_sensor_qos());
 
   pub_status_ =
     create_publisher<PredictedTrajectoryValidatorStatus>("~/output/validation_status", 1);
@@ -153,7 +152,8 @@ void PredictedTrajectoryValidator::on_lanelet_map(const LaneletMapBin::ConstShar
     autoware::experimental::lanelet2_utils::from_autoware_map_msgs(*msg));
 }
 
-void PredictedTrajectoryValidator::on_predicted_trajectory(const Trajectory::ConstSharedPtr msg)
+void PredictedTrajectoryValidator::on_predicted_trajectory(
+  const AUTOWARE_MESSAGE_CONST_SHARED_PTR(Trajectory) & msg)
 {
   stop_watch_.tic();
 
@@ -178,11 +178,11 @@ void PredictedTrajectoryValidator::on_predicted_trajectory(const Trajectory::Con
   }
   Odometry::ConstSharedPtr kinematics_msg = sub_kinematics_->take_data();
   if (!kinematics_msg) {
-    return waiting(sub_kinematics_->subscriber()->get_topic_name());
+    return waiting(sub_kinematics_->get_topic_name());
   }
   AccelWithCovarianceStamped::ConstSharedPtr acceleration_msg = sub_measured_acc_->take_data();
   if (!acceleration_msg) {
-    return waiting(sub_measured_acc_->subscriber()->get_topic_name());
+    return waiting(sub_measured_acc_->get_topic_name());
   }
   const auto objects_msg = sub_objects_->take_data();
   const auto pointcloud_msg = sub_pointcloud_->take_data();
