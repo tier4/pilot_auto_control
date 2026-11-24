@@ -30,10 +30,18 @@ subscribers:
   - name: lanelet2_map
     message_type: autoware_map_msgs/msg/LaneletMapBin
     remap_target: ~/input/lanelet2_map
+  - name: objects
+    message_type: autoware_perception_msgs/msg/PredictedObjects
+  - name: pointcloud
+    message_type: sensor_msgs/msg/PointCloud2
+    qos:
+      reliability: best_effort
 
 publishers:
   - name: validation_status
     message_type: autoware_control_validator/msg/ControlValidatorStatus
+  - name: hazard_alert
+    message_type: autoware_internal_control_msgs/msg/HazardAlert
 
 # parameters
 param_files:
