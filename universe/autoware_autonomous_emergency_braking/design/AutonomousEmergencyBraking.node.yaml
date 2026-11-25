@@ -25,6 +25,7 @@ subscribers:
     message_type: autoware_planning_msgs/msg/Trajectory
   - name: autoware/state
     message_type: autoware_system_msgs/msg/AutowareState
+    remap_target: /autoware/state
 
 publishers:
   - name: debug_marker

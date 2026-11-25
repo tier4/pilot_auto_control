@@ -19,6 +19,7 @@ subscribers:
     message_type: nav_msgs/msg/Odometry
   - name: operation_mode_state
     message_type: autoware_adapi_v1_msgs/msg/OperationModeState
+    remap_target: ~/input/operational_mode_state
   - name: measured_acceleration
     message_type: geometry_msgs/msg/AccelWithCovarianceStamped
   - name: trajectory

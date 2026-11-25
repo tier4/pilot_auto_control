@@ -66,7 +66,7 @@ subscribers:
     remap_target: input/mrm_state
   - name: kinematics
     message_type: nav_msgs/msg/Odometry
-    remap_target: kinematics
+    remap_target: /localization/kinematic_state
   - name: acceleration
     message_type: geometry_msgs/msg/AccelWithCovarianceStamped
     remap_target: input/acceleration
@@ -113,6 +113,7 @@ publishers:
     remap_target: /control/vehicle_cmd_gate/is_stopped
   - name: is_filter_activated
     message_type: autoware_vehicle_cmd_gate/msg/IsFilterActivated
+    remap_target: ~/is_filter_activated
 
 servers:
   - name: engage_service
