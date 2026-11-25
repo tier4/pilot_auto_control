@@ -12,6 +12,7 @@
 
   <depend>autoware_agnocast_wrapper</depend>
   <depend>autoware_command_mode_types</depend>
+  <depend>autoware_component_interface_specs</depend>
   <depend>autoware_component_interface_specs_universe</depend>
   <depend>autoware_component_interface_utils</depend>
   <depend>autoware_control_msgs</depend>

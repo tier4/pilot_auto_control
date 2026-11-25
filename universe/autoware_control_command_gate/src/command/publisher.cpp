@@ -14,6 +14,9 @@
 
 #include "publisher.hpp"
 
+#include <autoware/component_interface_specs/control.hpp>
+#include <autoware/component_interface_specs/utils.hpp>
+
 #include <memory>
 
 namespace autoware::control_command_gate
@@ -21,15 +24,17 @@ namespace autoware::control_command_gate
 
 CommandPublisher::CommandPublisher(autoware::agnocast_wrapper::Node & node)
 {
-  const auto control_qos = rclcpp::QoS(5);
-  const auto volatile_qos = rclcpp::QoS(1);
+  namespace control_spec = autoware::component_interface_specs::control;
+  using autoware::component_interface_specs::get_qos;
 
-  pub_control_ = node.create_publisher<Control>("~/output/control", control_qos);
-  pub_gear_ = node.create_publisher<GearCommand>("~/output/gear", volatile_qos);
-  pub_turn_indicators_ =
-    node.create_publisher<TurnIndicatorsCommand>("~/output/turn_indicators", volatile_qos);
-  pub_hazard_lights_ =
-    node.create_publisher<HazardLightsCommand>("~/output/hazard_lights", volatile_qos);
+  pub_control_ =
+    node.create_publisher<Control>("~/output/control", get_qos<control_spec::ControlCommand>());
+  pub_gear_ =
+    node.create_publisher<GearCommand>("~/output/gear", get_qos<control_spec::GearCommand>());
+  pub_turn_indicators_ = node.create_publisher<TurnIndicatorsCommand>(
+    "~/output/turn_indicators", get_qos<control_spec::TurnIndicatorsCommand>());
+  pub_hazard_lights_ = node.create_publisher<HazardLightsCommand>(
+    "~/output/hazard_lights", get_qos<control_spec::HazardLightsCommand>());
 }
 
 void CommandPublisher::on_control(uint16_t, const Control & msg)
