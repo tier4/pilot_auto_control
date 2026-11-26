@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -47,6 +48,22 @@ PointCloudParam to_pointcloud_param(
   out.min_cluster_size = static_cast<size_t>(std::max<int64_t>(pointcloud.min_cluster_size, 0));
   return out;
 }
+
+std::optional<nav_msgs::msg::Odometry> select_odometry_at(
+  const std::deque<nav_msgs::msg::Odometry> & history, const rclcpp::Time & stamp,
+  const double max_stamp_gap_s)
+{
+  std::optional<nav_msgs::msg::Odometry> best;
+  double best_gap = std::numeric_limits<double>::infinity();
+  for (const auto & odom : history) {
+    const double gap = std::abs((rclcpp::Time(odom.header.stamp) - stamp).seconds());
+    if (gap < best_gap && gap <= max_stamp_gap_s) {
+      best_gap = gap;
+      best = odom;
+    }
+  }
+  return best;
+}
 }  // namespace
 
 PointCloudPipeline::PointCloudPipeline(
@@ -75,28 +92,14 @@ void PointCloudPipeline::update_history(
   }
 }
 
-std::optional<nav_msgs::msg::Odometry> PointCloudPipeline::select_odometry_at(
-  const rclcpp::Time & stamp) const
-{
-  std::optional<nav_msgs::msg::Odometry> best;
-  double best_gap = std::numeric_limits<double>::infinity();
-  for (const auto & odom : odometry_history_) {
-    const double gap = std::abs((rclcpp::Time(odom.header.stamp) - stamp).seconds());
-    if (gap < best_gap && gap <= max_stamp_gap_s_) {
-      best_gap = gap;
-      best = odom;
-    }
-  }
-  return best;
-}
-
 void PointCloudPipeline::process(
   const sensor_msgs::msg::PointCloud2 & pointcloud,
   const std::vector<std::shared_ptr<const nav_msgs::msg::Odometry>> & odometries,
   const vehicle_info_utils::VehicleInfo & vehicle_info)
 {
   update_history(odometries);
-  const auto odom = select_odometry_at(rclcpp::Time(pointcloud.header.stamp));
+  const auto odom =
+    select_odometry_at(odometry_history_, rclcpp::Time(pointcloud.header.stamp), max_stamp_gap_s_);
   if (!odom) {
     RCLCPP_WARN_THROTTLE(
       logger_, steady_clock_, 5000, "no odometry close to the pointcloud stamp. Frame dropped.");

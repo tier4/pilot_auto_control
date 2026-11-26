@@ -70,7 +70,6 @@ public:
 private:
   void update_history(
     const std::vector<std::shared_ptr<const nav_msgs::msg::Odometry>> & odometries);
-  std::optional<nav_msgs::msg::Odometry> select_odometry_at(const rclcpp::Time & stamp) const;
 
   static constexpr size_t kOdometryHistorySize = 10;
 
