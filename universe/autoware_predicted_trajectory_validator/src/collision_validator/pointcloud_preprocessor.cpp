@@ -46,6 +46,40 @@ struct Voxel
   size_t raw_point_count;
 };
 
+struct Roi
+{
+  double x_min;
+  double x_max;
+  double lateral;
+  double z_low;
+  double z_high;
+  Polygon2d footprint;
+};
+
+// Ego-footprint exclusion and ROI crop, reading the fields by name so that any point layout is
+// accepted.
+std::vector<Point3d> extract_points_in_roi(
+  const sensor_msgs::msg::PointCloud2 & pointcloud, const Roi & roi)
+{
+  std::vector<Point3d> cropped_pointcloud;
+  cropped_pointcloud.reserve(pointcloud.width * pointcloud.height);
+  sensor_msgs::PointCloud2ConstIterator<float> it_x(pointcloud, "x");
+  sensor_msgs::PointCloud2ConstIterator<float> it_y(pointcloud, "y");
+  sensor_msgs::PointCloud2ConstIterator<float> it_z(pointcloud, "z");
+  for (; it_x != it_x.end(); ++it_x, ++it_y, ++it_z) {
+    const float x = *it_x;
+    const float y = *it_y;
+    const float z = *it_z;
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) continue;
+    if (x < roi.x_min || x > roi.x_max) continue;
+    if (std::abs(y) > roi.lateral) continue;
+    if (z < roi.z_low || z >= roi.z_high) continue;
+    if (boost::geometry::within(Point2d{x, y}, roi.footprint)) continue;
+    cropped_pointcloud.emplace_back(x, y, z);
+  }
+  return cropped_pointcloud;
+}
+
 std::vector<Voxel> voxelize(
   const std::vector<Point3d> & cropped_pointcloud, const double voxel_size)
 {
@@ -93,6 +127,86 @@ std::vector<Voxel> voxelize(
   }
   return voxels;
 }
+
+// Uniform subsampling of the voxels to bound the clustering time.
+std::vector<Voxel> subsample(std::vector<Voxel> voxels, const size_t max_voxels)
+{
+  if (voxels.size() <= max_voxels) {
+    return voxels;
+  }
+  const size_t stride = (voxels.size() + max_voxels - 1) / max_voxels;
+  std::vector<Voxel> subsampled;
+  subsampled.reserve(voxels.size() / stride + 1);
+  for (size_t i = 0; i < voxels.size(); i += stride) {
+    subsampled.push_back(voxels[i]);
+  }
+  return subsampled;
+}
+
+std::vector<pcl::PointIndices> cluster(
+  const std::vector<Voxel> & voxels, const double cluster_tolerance)
+{
+  pcl::PointCloud<pcl::PointXYZ>::Ptr voxel_pointcloud(new pcl::PointCloud<pcl::PointXYZ>);
+  voxel_pointcloud->reserve(voxels.size());
+  for (const auto & voxel : voxels) {
+    voxel_pointcloud->push_back(
+      pcl::PointXYZ(
+        static_cast<float>(voxel.centroid.x()), static_cast<float>(voxel.centroid.y()),
+        static_cast<float>(voxel.centroid.z())));
+  }
+
+  std::vector<pcl::PointIndices> cluster_indices;
+  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+  tree->setInputCloud(voxel_pointcloud);
+  pcl::EuclideanClusterExtraction<pcl::PointXYZ> extraction;
+  extraction.setClusterTolerance(cluster_tolerance);
+  // No size filter here: clusters are filtered later by the raw (before voxel grid) point count.
+  extraction.setMinClusterSize(1);
+  extraction.setMaxClusterSize(static_cast<int>(voxel_pointcloud->size()));
+  extraction.setSearchMethod(tree);
+  extraction.setInputCloud(voxel_pointcloud);
+  extraction.extract(cluster_indices);
+  return cluster_indices;
+}
+
+// Points of each cluster (base_link) -> map through the ego pose at the pointcloud stamp.
+// Points that belong to no cluster are dropped.
+std::vector<PointCluster> to_map_clusters(
+  const std::vector<Voxel> & voxels, const std::vector<pcl::PointIndices> & cluster_indices,
+  const geometry_msgs::msg::Pose & ego_pose, const size_t min_cluster_size)
+{
+  const double yaw = autoware_utils_geometry::get_rpy(ego_pose).z;
+  const double cos_yaw = std::cos(yaw);
+  const double sin_yaw = std::sin(yaw);
+  std::vector<PointCluster> clusters;
+  clusters.reserve(cluster_indices.size());
+  for (const auto & indices : cluster_indices) {
+    size_t raw_point_count = 0;
+    for (const auto index : indices.indices) {
+      raw_point_count += voxels[static_cast<size_t>(index)].raw_point_count;
+    }
+    if (raw_point_count < min_cluster_size) {
+      continue;
+    }
+    PointCluster cluster;
+    cluster.raw_point_count = raw_point_count;
+    cluster.points.reserve(indices.indices.size());
+    double sum_x = 0.0;
+    double sum_y = 0.0;
+    for (const auto index : indices.indices) {
+      const auto & p = voxels[static_cast<size_t>(index)].centroid;
+      const double map_x = ego_pose.position.x + cos_yaw * p.x() - sin_yaw * p.y();
+      const double map_y = ego_pose.position.y + sin_yaw * p.x() + cos_yaw * p.y();
+      cluster.points.emplace_back(map_x, map_y);
+      sum_x += map_x;
+      sum_y += map_y;
+    }
+    const auto n = static_cast<double>(cluster.points.size());
+    cluster.centroid = Point2d{sum_x / n, sum_y / n};
+    clusters.push_back(std::move(cluster));
+  }
+  return clusters;
+}
 }  // namespace
 
 PointCloudPreprocessor::PointCloudPreprocessor(
@@ -117,148 +231,60 @@ double PointCloudPreprocessor::z_max(const vehicle_info_utils::VehicleInfo & veh
   return vehicle_info.max_height_offset_m + param_.z_margin_high;
 }
 
-const std::optional<PointCloudClusters> & PointCloudPreprocessor::process(
-  const sensor_msgs::msg::PointCloud2 & pointcloud,
-  const std::optional<geometry_msgs::msg::Pose> & ego_pose_at_pointcloud_stamp, const double v_ego,
-  const double horizon_s, const vehicle_info_utils::VehicleInfo & vehicle_info)
+std::optional<PointCloudClusters> PointCloudPreprocessor::process(
+  const sensor_msgs::msg::PointCloud2 & pointcloud, const nav_msgs::msg::Odometry & odom,
+  const vehicle_info_utils::VehicleInfo & vehicle_info)
 {
   try {
-    return process_frame(pointcloud, ego_pose_at_pointcloud_stamp, v_ego, horizon_s, vehicle_info);
+    return process_frame(pointcloud, odom, vehicle_info);
   } catch (const std::exception & e) {
     RCLCPP_WARN_THROTTLE(
       logger_, steady_clock_, 5000, "pointcloud preprocessing skipped: %s", e.what());
-    result_ = std::nullopt;
-    return result_;
+    return std::nullopt;
   }
 }
 
-const std::optional<PointCloudClusters> & PointCloudPreprocessor::process_frame(
-  const sensor_msgs::msg::PointCloud2 & pointcloud,
-  const std::optional<geometry_msgs::msg::Pose> & ego_pose_at_pointcloud_stamp, const double v_ego,
-  const double horizon_s, const vehicle_info_utils::VehicleInfo & vehicle_info)
+std::optional<PointCloudClusters> PointCloudPreprocessor::process_frame(
+  const sensor_msgs::msg::PointCloud2 & pointcloud, const nav_msgs::msg::Odometry & odom,
+  const vehicle_info_utils::VehicleInfo & vehicle_info)
 {
   const rclcpp::Time stamp(pointcloud.header.stamp);
-  if (result_ && result_->stamp == stamp) {
-    return result_;
-  }
   if (pointcloud.header.frame_id != kExpectedFrame) {
     RCLCPP_WARN_THROTTLE(
       logger_, steady_clock_, 5000, "pointcloud frame_id is '%s', expected '%s'. Frame dropped.",
       pointcloud.header.frame_id.c_str(), kExpectedFrame);
-    return result_;
-  }
-  if (!ego_pose_at_pointcloud_stamp) {
-    RCLCPP_WARN_THROTTLE(
-      logger_, steady_clock_, 5000, "no odometry close to the pointcloud stamp. Frame dropped.");
-    return result_;
+    return std::nullopt;
   }
   if (pointcloud.width * pointcloud.height == 0) {
-    result_ = PointCloudClusters{{}, stamp};
-    return result_;
+    return PointCloudClusters{{}, stamp};
   }
 
-  // Ego-footprint exclusion and ROI crop, reading the fields by name so that any point layout is
-  // accepted. The height bounds come from vehicle_info (base_link is on the ground plane).
-  const double x_min =
-    vehicle_info.min_longitudinal_offset_m - std::max(-v_ego, 0.0) * horizon_s - param_.roi_rear;
-  const double x_max = vehicle_info.max_longitudinal_offset_m + std::max(v_ego, 0.0) * horizon_s +
-                       param_.roi_front_margin;
-  const double z_low = z_min(vehicle_info);
-  const double z_high = z_max(vehicle_info);
-  Polygon2d footprint;
-  footprint.outer() = vehicle_info.createFootprint(0.0);
-  boost::geometry::correct(footprint);
-  std::vector<Point3d> cropped_pointcloud;
-  cropped_pointcloud.reserve(pointcloud.width * pointcloud.height);
-  sensor_msgs::PointCloud2ConstIterator<float> it_x(pointcloud, "x");
-  sensor_msgs::PointCloud2ConstIterator<float> it_y(pointcloud, "y");
-  sensor_msgs::PointCloud2ConstIterator<float> it_z(pointcloud, "z");
+  // The height bounds come from vehicle_info (base_link is on the ground plane).
+  const double v_ego = odom.twist.twist.linear.x;
+  Roi roi;
+  roi.x_min = vehicle_info.min_longitudinal_offset_m - std::max(-v_ego, 0.0) * param_.horizon -
+              param_.roi_rear;
+  roi.x_max = vehicle_info.max_longitudinal_offset_m + std::max(v_ego, 0.0) * param_.horizon +
+              param_.roi_front_margin;
+  roi.lateral = param_.roi_lateral;
+  roi.z_low = z_min(vehicle_info);
+  roi.z_high = z_max(vehicle_info);
+  roi.footprint.outer() = vehicle_info.createFootprint(0.0);
+  boost::geometry::correct(roi.footprint);
+
   time_keeper_->start_track("crop_and_voxelize");
-  for (; it_x != it_x.end(); ++it_x, ++it_y, ++it_z) {
-    const float x = *it_x;
-    const float y = *it_y;
-    const float z = *it_z;
-    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) continue;
-    if (x < x_min || x > x_max) continue;
-    if (std::abs(y) > param_.roi_lateral) continue;
-    if (z < z_low || z >= z_high) continue;
-    if (boost::geometry::within(Point2d{x, y}, footprint)) continue;
-    cropped_pointcloud.emplace_back(x, y, z);
-  }
-
-  auto voxels = voxelize(cropped_pointcloud, param_.voxel_size);
-
-  // Uniform subsampling of the voxels to bound the clustering time.
-  if (voxels.size() > param_.max_voxels) {
-    const size_t stride = (voxels.size() + param_.max_voxels - 1) / param_.max_voxels;
-    std::vector<Voxel> subsampled;
-    subsampled.reserve(voxels.size() / stride + 1);
-    for (size_t i = 0; i < voxels.size(); i += stride) {
-      subsampled.push_back(voxels[i]);
-    }
-    voxels = std::move(subsampled);
-  }
+  const auto voxels = subsample(
+    voxelize(extract_points_in_roi(pointcloud, roi), param_.voxel_size), param_.max_voxels);
   time_keeper_->end_track("crop_and_voxelize");
 
   time_keeper_->start_track("clustering");
   std::vector<PointCluster> clusters;
   if (!voxels.empty()) {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr voxel_pointcloud(new pcl::PointCloud<pcl::PointXYZ>);
-    voxel_pointcloud->reserve(voxels.size());
-    for (const auto & voxel : voxels) {
-      voxel_pointcloud->push_back(
-        pcl::PointXYZ(
-          static_cast<float>(voxel.centroid.x()), static_cast<float>(voxel.centroid.y()),
-          static_cast<float>(voxel.centroid.z())));
-    }
-
-    std::vector<pcl::PointIndices> cluster_indices;
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
-    tree->setInputCloud(voxel_pointcloud);
-    pcl::EuclideanClusterExtraction<pcl::PointXYZ> extraction;
-    extraction.setClusterTolerance(param_.cluster_tolerance);
-    extraction.setMinClusterSize(1);
-    extraction.setMaxClusterSize(static_cast<int>(voxel_pointcloud->size()));
-    extraction.setSearchMethod(tree);
-    extraction.setInputCloud(voxel_pointcloud);
-    extraction.extract(cluster_indices);
-
-    // Points of each cluster (base_link) -> map through the ego pose at the pointcloud stamp.
-    // Points that belong to no cluster are dropped.
-    const auto & ego_pose = *ego_pose_at_pointcloud_stamp;
-    const double yaw = autoware_utils_geometry::get_rpy(ego_pose).z;
-    const double cos_yaw = std::cos(yaw);
-    const double sin_yaw = std::sin(yaw);
-    clusters.reserve(cluster_indices.size());
-    for (const auto & indices : cluster_indices) {
-      size_t raw_point_count = 0;
-      for (const auto index : indices.indices) {
-        raw_point_count += voxels[static_cast<size_t>(index)].raw_point_count;
-      }
-      if (raw_point_count < param_.min_cluster_size) {
-        continue;
-      }
-      PointCluster cluster;
-      cluster.raw_point_count = raw_point_count;
-      cluster.points.reserve(indices.indices.size());
-      double sum_x = 0.0;
-      double sum_y = 0.0;
-      for (const auto index : indices.indices) {
-        const auto & p = voxels[static_cast<size_t>(index)].centroid;
-        const double map_x = ego_pose.position.x + cos_yaw * p.x() - sin_yaw * p.y();
-        const double map_y = ego_pose.position.y + sin_yaw * p.x() + cos_yaw * p.y();
-        cluster.points.emplace_back(map_x, map_y);
-        sum_x += map_x;
-        sum_y += map_y;
-      }
-      const auto n = static_cast<double>(cluster.points.size());
-      cluster.centroid = Point2d{sum_x / n, sum_y / n};
-      clusters.push_back(std::move(cluster));
-    }
+    clusters = to_map_clusters(
+      voxels, cluster(voxels, param_.cluster_tolerance), odom.pose.pose, param_.min_cluster_size);
   }
   time_keeper_->end_track("clustering");
 
-  result_ = PointCloudClusters{std::move(clusters), stamp};
-  return result_;
+  return PointCloudClusters{std::move(clusters), stamp};
 }
 }  // namespace autoware::predicted_trajectory_validator::collision_validator

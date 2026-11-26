@@ -25,7 +25,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -40,7 +39,6 @@ using autoware_internal_control_msgs::msg::HazardSector;
 using collision_validator::CollisionCandidate;
 using collision_validator::CollisionEvaluatorParam;
 using collision_validator::PointCloudClusters;
-using collision_validator::PointCloudParam;
 
 std::optional<uint8_t> label_from_name(const std::string & name)
 {
@@ -58,23 +56,6 @@ std::optional<uint8_t> label_from_name(const std::string & name)
   if (upper == "ANIMAL") return ObjectClassification::ANIMAL;
   if (upper == "HAZARD") return ObjectClassification::HAZARD;
   return std::nullopt;
-}
-
-PointCloudParam to_pointcloud_param(
-  const ::predicted_trajectory_validator::Params::CollisionValidator & params)
-{
-  const auto & pointcloud = params.pointcloud;
-  PointCloudParam out;
-  out.roi_rear = pointcloud.roi.rear;
-  out.roi_front_margin = pointcloud.roi.front_margin;
-  out.roi_lateral = pointcloud.roi.lateral;
-  out.z_margin_low = pointcloud.roi.z_margin_low;
-  out.z_margin_high = pointcloud.roi.z_margin_high;
-  out.max_voxels = static_cast<size_t>(std::max<int64_t>(pointcloud.max_voxels, 0));
-  out.voxel_size = pointcloud.voxel_size;
-  out.cluster_tolerance = pointcloud.cluster_tolerance;
-  out.min_cluster_size = static_cast<size_t>(std::max<int64_t>(pointcloud.min_cluster_size, 0));
-  return out;
 }
 
 CollisionEvaluatorParam to_collision_evaluator_param(
@@ -120,7 +101,6 @@ CollisionValidator::CollisionValidator(
 : logger_(logger),
   time_keeper_(time_keeper),
   params_(params.collision_validator),
-  pointcloud_preprocessor_(logger, to_pointcloud_param(params.collision_validator), time_keeper),
   collision_evaluator_(to_collision_evaluator_param(params.collision_validator))
 {
 }
@@ -128,35 +108,7 @@ CollisionValidator::CollisionValidator(
 void CollisionValidator::update_parameters(const ::predicted_trajectory_validator::Params & params)
 {
   params_ = params.collision_validator;
-  pointcloud_preprocessor_.update_parameters(to_pointcloud_param(params_));
   collision_evaluator_.update_parameters(to_collision_evaluator_param(params_));
-}
-
-void CollisionValidator::update_history(const nav_msgs::msg::Odometry & odom)
-{
-  if (
-    odometry_history_.empty() ||
-    rclcpp::Time(odometry_history_.back().header.stamp) != rclcpp::Time(odom.header.stamp)) {
-    odometry_history_.push_back(odom);
-    while (odometry_history_.size() > kOdometryHistorySize) {
-      odometry_history_.pop_front();
-    }
-  }
-}
-
-std::optional<geometry_msgs::msg::Pose> CollisionValidator::select_ego_pose_at(
-  const rclcpp::Time & stamp) const
-{
-  std::optional<geometry_msgs::msg::Pose> best;
-  double best_gap = std::numeric_limits<double>::infinity();
-  for (const auto & odom : odometry_history_) {
-    const double gap = std::abs((rclcpp::Time(odom.header.stamp) - stamp).seconds());
-    if (gap < best_gap && gap <= params_.pointcloud.max_stamp_gap_s) {
-      best_gap = gap;
-      best = odom.pose.pose;
-    }
-  }
-  return best;
 }
 
 std::vector<HazardSource> CollisionValidator::to_hazard_sources(
@@ -179,13 +131,14 @@ void CollisionValidator::validate(
   const nav_msgs::msg::Odometry & odom,
   const autoware_perception_msgs::msg::PredictedObjects::ConstSharedPtr & objects,
   const vehicle_info_utils::VehicleInfo & vehicle_info,
-  const sensor_msgs::msg::PointCloud2::ConstSharedPtr & pointcloud,
+  const std::shared_ptr<const PointCloudClusters> & clusters, const rclcpp::Time & now,
   HazardWarningSources & hazard_sources)
 {
   if (!params_.enable_warning) {
+    // Disabled raises nothing; unset is only for a cycle that cannot be evaluated.
+    hazard_sources.collision.emplace();
     return;
   }
-  update_history(odom);
   if (predicted_trajectory.points.size() < 2) {
     hazard_sources.collision.emplace();
     return;
@@ -204,26 +157,24 @@ void CollisionValidator::validate(
     return;
   }
 
-  const double horizon = std::min(
-    params_.prediction_horizon,
-    rclcpp::Duration(predicted_trajectory.points.back().time_from_start).seconds());
-
-  const std::optional<PointCloudClusters> no_clusters;
-  const auto & clusters =
-    params_.enable_pointcloud && pointcloud
-      ? pointcloud_preprocessor_.process(
-          *pointcloud, select_ego_pose_at(rclcpp::Time(pointcloud->header.stamp)),
-          odom.twist.twist.linear.x, horizon, vehicle_info)
-      : no_clusters;
-  if (!objects && !clusters) {
+  std::shared_ptr<const PointCloudClusters> evaluated_clusters;
+  if (params_.enable_pointcloud) {
+    if (!clusters || (now - clusters->stamp).seconds() > params_.pointcloud.max_age_s) {
+      RCLCPP_WARN_THROTTLE(
+        logger_, steady_clock_, 5000,
+        "no recent preprocessed pointcloud. Collision evaluation skipped.");
+      return;
+    }
+    evaluated_clusters = clusters;
+  } else if (!objects) {
     return;
   }
 
   std::vector<CollisionCandidate> candidates;
   try {
     autoware_utils_debug::ScopedTimeTrack st("collision_evaluator_evaluate", *time_keeper_);
-    candidates =
-      collision_evaluator_.evaluate(predicted_trajectory, odom, vehicle_info, objects, clusters);
+    candidates = collision_evaluator_.evaluate(
+      predicted_trajectory, odom, vehicle_info, objects, evaluated_clusters);
   } catch (const std::exception & e) {
     RCLCPP_WARN_THROTTLE(
       logger_, steady_clock_, 5000, "collision evaluation skipped: %s", e.what());

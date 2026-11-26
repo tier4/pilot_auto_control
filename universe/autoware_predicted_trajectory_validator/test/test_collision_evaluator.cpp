@@ -64,8 +64,8 @@ TEST(CollisionEvaluatorTest, EgoFootprintFollowsTheLeftAndRightOverhangs)
   const auto vehicle_info = vehicle_info_utils::createVehicleInfo(
     0.383, 0.235, 2.79, 1.64, 1.0, 1.1, 1.0, 0.128, 2.5, 0.70);
   const auto evaluate_cluster = [&](const PointCluster & cluster) {
-    const std::optional<PointCloudClusters> point_clusters =
-      PointCloudClusters{{cluster}, rclcpp::Time(kCloudStamp)};
+    const auto point_clusters = std::make_shared<const PointCloudClusters>(
+      PointCloudClusters{{cluster}, rclcpp::Time(kCloudStamp)});
     return CollisionEvaluator(default_param())
       .evaluate(
         predicted, odom, vehicle_info,

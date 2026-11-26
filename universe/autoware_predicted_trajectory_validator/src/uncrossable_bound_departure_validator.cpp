@@ -32,10 +32,12 @@ void UncrossableBoundDepartureValidator::validate(
   const vehicle_info_utils::VehicleInfo & vehicle_info,
   visualization_msgs::msg::MarkerArray & debug_markers, HazardWarningSources & hazard_sources)
 {
+  // Disabled or no predicted motion (fewer than 2 points) raises nothing; unset is only for a
+  // cycle that cannot be evaluated.
+  if (!enable_warning_ || predicted_trajectory.points.size() < 2) {
+    hazard_sources.departure.emplace();
+  }
   if (predicted_trajectory.points.size() < 2) {
-    if (enable_warning_) {
-      hazard_sources.departure.emplace();
-    }
     return;
   }
 

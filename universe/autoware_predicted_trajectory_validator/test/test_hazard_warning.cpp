@@ -47,6 +47,7 @@ constexpr double kApexX = 1.345;
 HazardWarningSources departure_only(const std::vector<HazardSource> & sources)
 {
   HazardWarningSources hazard_sources;
+  hazard_sources.collision.emplace();
   hazard_sources.departure = sources;
   return hazard_sources;
 }
@@ -192,6 +193,37 @@ TEST(HazardWarningTest, EitherSourceAloneReturnsAnAlert)
   ASSERT_TRUE(departure.has_value());
   EXPECT_FALSE(raised_sectors(*departure).empty());
 }
+
+struct UnevaluatedCase
+{
+  std::string name;
+  HazardWarningSources sources;
+};
+
+class UnevaluatedSourcesTest : public ::testing::TestWithParam<UnevaluatedCase>
+{
+};
+
+TEST_P(UnevaluatedSourcesTest, NoAlertWhenEitherSideIsNotEvaluated)
+{
+  auto warning = make_warning();
+  EXPECT_FALSE(warning.make_alert(GetParam().sources, test_vehicle_info(), at(0.0)).has_value());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+  HazardWarningTest, UnevaluatedSourcesTest,
+  ::testing::Values(
+    UnevaluatedCase{"Neither", HazardWarningSources{}},
+    UnevaluatedCase{
+      "CollisionOnly",
+      HazardWarningSources{
+        std::vector<HazardSource>{make_box(10.0, 11.0, -0.5, 0.5, HazardSector::LOW)},
+        std::nullopt}},
+    UnevaluatedCase{
+      "DepartureOnly",
+      HazardWarningSources{
+        std::nullopt, std::vector<HazardSource>{make_point(5.0, 3.0, HazardSector::MID)}}}),
+  [](const ::testing::TestParamInfo<UnevaluatedCase> & info) { return info.param.name; });
 
 TEST(HazardWarningTest, SectorLatchHoldsTheLastRiskLevelAndIgnoresCyclesWithoutSources)
 {

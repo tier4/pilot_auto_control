@@ -69,7 +69,7 @@ public:
 
   /**
    * @param vehicle_info footprint whose centroid is the origin of the sector bearings
-   * @return nullopt when disabled or when neither collision nor departure was evaluated
+   * @return nullopt when either collision or departure could not be evaluated
    */
   std::optional<autoware_internal_control_msgs::msg::HazardAlert> make_alert(
     const HazardWarningSources & hazard_sources,

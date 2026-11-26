@@ -31,6 +31,8 @@
 
 #include <cmath>
 #include <memory>
+#include <optional>
+#include <vector>
 
 using autoware_planning_msgs::msg::Trajectory;
 using autoware_planning_msgs::msg::TrajectoryPoint;
@@ -225,14 +227,14 @@ TEST_F(
   EXPECT_FALSE(sources.departure->empty());
 }
 
-TEST_F(UncrossableBoundDepartureValidatorTest, DepartureIsNotHandedOverWhenDisabledOrSkipped)
+TEST_F(UncrossableBoundDepartureValidatorTest, DepartureIsUnsetOnlyWhenItCannotBeEvaluated)
 {
   const auto map = make_road_border_map();
   const auto trajectory = make_trajectory(0.0, -2.5, 10.0, 0.0);
-  const auto is_handed_over = [&](
-                                const ::predicted_trajectory_validator::Params & params,
-                                const lanelet::LaneletMapPtr & lanelet_map,
-                                const Trajectory & predicted_trajectory) {
+  const auto departure_of = [&](
+                              const ::predicted_trajectory_validator::Params & params,
+                              const lanelet::LaneletMapPtr & lanelet_map,
+                              const Trajectory & predicted_trajectory) {
     UncrossableBoundDepartureValidator validator(node_->get_logger(), params);
     geometry_msgs::msg::AccelWithCovarianceStamped acceleration;
     visualization_msgs::msg::MarkerArray markers;
@@ -241,17 +243,21 @@ TEST_F(UncrossableBoundDepartureValidatorTest, DepartureIsNotHandedOverWhenDisab
     validator.validate(
       res, predicted_trajectory, make_odometry(trajectory, 10.0, 0.0), acceleration, lanelet_map,
       vehicle_info_, markers, sources);
-    return sources.departure.has_value();
+    return sources.departure;
+  };
+  const auto is_empty = [](const std::optional<std::vector<HazardSource>> & departure) {
+    return departure.has_value() && departure->empty();
   };
 
   auto no_warning = params_;
   no_warning.uncrossable_bound_departure_validator.enable_warning = false;
 
-  EXPECT_TRUE(is_handed_over(params_, map, trajectory));
-  EXPECT_FALSE(is_handed_over(no_warning, map, trajectory));
-  EXPECT_FALSE(is_handed_over(params_, nullptr, trajectory));
-  EXPECT_TRUE(is_handed_over(params_, map, Trajectory{}));
-  EXPECT_FALSE(is_handed_over(no_warning, map, Trajectory{}));
+  EXPECT_TRUE(departure_of(params_, map, trajectory).has_value());
+  EXPECT_FALSE(departure_of(params_, nullptr, trajectory).has_value());
+  EXPECT_TRUE(is_empty(departure_of(params_, map, Trajectory{})));
+  EXPECT_TRUE(is_empty(departure_of(no_warning, map, trajectory)));
+  EXPECT_TRUE(is_empty(departure_of(no_warning, nullptr, trajectory)));
+  EXPECT_TRUE(is_empty(departure_of(no_warning, map, Trajectory{})));
 }
 
 TEST_F(UncrossableBoundDepartureValidatorTest, WarningIsRaisedWhileTheMrmCheckIsDisabled)

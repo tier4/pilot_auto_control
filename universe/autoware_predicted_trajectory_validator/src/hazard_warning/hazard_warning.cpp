@@ -287,7 +287,7 @@ std::optional<HazardAlert> HazardWarning::make_alert(
   const HazardWarningSources & hazard_sources, const vehicle_info_utils::VehicleInfo & vehicle_info,
   const rclcpp::Time & now)
 {
-  if (!hazard_sources.collision.has_value() && !hazard_sources.departure.has_value()) {
+  if (!hazard_sources.collision.has_value() || !hazard_sources.departure.has_value()) {
     return std::nullopt;
   }
 

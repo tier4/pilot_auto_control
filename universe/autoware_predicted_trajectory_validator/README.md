@@ -10,6 +10,8 @@
 
 When the vehicle is not in autonomous mode (`mode != AUTONOMOUS` or `!is_autoware_control_enabled`), every `is_valid` is overwritten with `true` after the checks run. The hazard alert is not overwritten.
 
+The hazard alert is not published in a cycle where the collision or the departure cannot be evaluated.
+
 ## Inputs / Outputs
 
 ### Input
@@ -26,17 +28,19 @@ When the vehicle is not in autonomous mode (`mode != AUTONOMOUS` or `!is_autowar
 
 ### Output
 
-| Name                                       | Type                                                                       | Description                                                   |
-| ------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `~/output/validation_status`               | autoware_predicted_trajectory_validator/PredictedTrajectoryValidatorStatus | result and invalid count of each check                        |
-| `~/output/hazard_alert`                    | autoware_internal_control_msgs/HazardAlert                                 | hazard level of each sector                                   |
-| `~/output/markers`                         | visualization_msgs/MarkerArray                                             | boundary departure markers                                    |
-| `~/virtual_wall`                           | visualization_msgs/MarkerArray                                             | virtual wall while a check is invalid                         |
-| `~/debug/hazard/markers`                   | visualization_msgs/MarkerArray                                             | hazard sources and sector wedges                              |
-| `~/debug/processing_time_ms`               | autoware_internal_debug_msgs/Float64Stamped                                | processing time of one cycle                                  |
-| `~/debug/hazard/processing_time_ms`        | autoware_internal_debug_msgs/Float64Stamped                                | processing time of the hazard alert                           |
-| `~/debug/hazard/processing_time_detail_ms` | autoware_utils_debug/ProcessingTimeDetail                                  | processing time breakdown of the hazard alert                 |
-| `/diagnostics`                             | diagnostic_msgs/DiagnosticArray                                            | `predicted_trajectory_validator: uncrossable_bound_departure` |
+| Name                                           | Type                                                                       | Description                                                                        |
+| ---------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `~/output/validation_status`                   | autoware_predicted_trajectory_validator/PredictedTrajectoryValidatorStatus | result and invalid count of each check                                             |
+| `~/output/hazard_alert`                        | autoware_internal_control_msgs/HazardAlert                                 | hazard level of each sector                                                        |
+| `~/output/markers`                             | visualization_msgs/MarkerArray                                             | boundary departure markers                                                         |
+| `~/virtual_wall`                               | visualization_msgs/MarkerArray                                             | virtual wall while a check is invalid                                              |
+| `~/debug/hazard/markers`                       | visualization_msgs/MarkerArray                                             | hazard sources and sector wedges                                                   |
+| `~/debug/processing_time_ms`                   | autoware_internal_debug_msgs/Float64Stamped                                | processing time of one cycle                                                       |
+| `~/debug/hazard/processing_time_ms`            | autoware_internal_debug_msgs/Float64Stamped                                | processing time of the hazard alert                                                |
+| `~/debug/hazard/processing_time_detail_ms`     | autoware_utils_debug/ProcessingTimeDetail                                  | processing time breakdown of the hazard alert                                      |
+| `~/debug/pointcloud/processing_time_ms`        | autoware_internal_debug_msgs/Float64Stamped                                | processing time of the pointcloud preprocessing, published per received pointcloud |
+| `~/debug/pointcloud/processing_time_detail_ms` | autoware_utils_debug/ProcessingTimeDetail                                  | processing time breakdown of the pointcloud preprocessing                          |
+| `/diagnostics`                                 | diagnostic_msgs/DiagnosticArray                                            | `predicted_trajectory_validator: uncrossable_bound_departure`                      |
 
 ## Parameters
 

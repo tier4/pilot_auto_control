@@ -132,6 +132,7 @@ predicted_trajectory_validator:
     enable_pointcloud:
       type: bool
       description: If true, pointcloud clusters raise a collision warning.
+      read_only: true
     max_evaluations:
       object:
         type: int
@@ -182,3 +183,8 @@ predicted_trajectory_validator:
       max_stamp_gap_s:
         type: double
         description: Maximum time difference between the pointcloud stamp and the odometry used to place it [s].
+      max_age_s:
+        type: double
+        description: Maximum age of the pointcloud clusters to evaluate. Beyond it, the hazard alert is not published [s].
+        validation:
+          gt<>: [0.0]

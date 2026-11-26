@@ -40,13 +40,15 @@ PredictedTrajectoryValidator::PredictedTrajectoryValidator(const rclcpp::NodeOpt
 : Node("predicted_trajectory_validator", options),
   param_listener_(get_node_parameters_interface()),
   params_(param_listener_.get_params()),
+  pointcloud_params_(params_),
   vehicle_info_(),
   uncrossable_bound_departure_validator_(get_logger(), params_),
   collision_validator_(get_logger(), params_, hazard_time_keeper_),
   hazard_warning_(
     get_logger(), params_,
     create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/hazard/markers", 1),
-    hazard_time_keeper_)
+    hazard_time_keeper_),
+  pointcloud_pipeline_(get_logger(), params_, pointcloud_time_keeper_)
 {
   using std::placeholders::_1;
 
@@ -67,8 +69,15 @@ PredictedTrajectoryValidator::PredictedTrajectoryValidator(const rclcpp::NodeOpt
     std::bind(&PredictedTrajectoryValidator::on_lanelet_map, this, _1));
   sub_objects_ = autoware::agnocast_wrapper::polling::create_polling_subscriber<PredictedObjects>(
     this, "~/input/objects", 1);
-  sub_pointcloud_ = autoware::agnocast_wrapper::polling::create_polling_subscriber<PointCloud2>(
-    this, "~/input/pointcloud", autoware_utils_rclcpp::single_depth_sensor_qos());
+  cb_group_pointcloud_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  AUTOWARE_SUBSCRIPTION_OPTIONS pointcloud_sub_options;
+  pointcloud_sub_options.callback_group = cb_group_pointcloud_;
+  sub_pointcloud_ = create_subscription<PointCloud2>(
+    "~/input/pointcloud", autoware_utils_rclcpp::single_depth_sensor_qos(),
+    std::bind(&PredictedTrajectoryValidator::on_pointcloud, this, _1), pointcloud_sub_options);
+  sub_kinematics_for_pointcloud_ = autoware::agnocast_wrapper::polling::create_polling_subscriber<
+    nav_msgs::msg::Odometry, autoware::agnocast_wrapper::polling::polling_policy::All>(
+    this, "~/input/kinematics", 10);
 
   pub_status_ =
     create_publisher<PredictedTrajectoryValidatorStatus>("~/output/validation_status", 1);
@@ -84,6 +93,13 @@ PredictedTrajectoryValidator::PredictedTrajectoryValidator(const rclcpp::NodeOpt
   pub_hazard_processing_time_detail_ = create_publisher<autoware_utils_debug::ProcessingTimeDetail>(
     "~/debug/hazard/processing_time_detail_ms", 1);
   hazard_time_keeper_->add_reporter(pub_hazard_processing_time_detail_);
+  pub_pointcloud_processing_time_ =
+    create_publisher<autoware_internal_debug_msgs::msg::Float64Stamped>(
+      "~/debug/pointcloud/processing_time_ms", 1);
+  pub_pointcloud_processing_time_detail_ =
+    create_publisher<autoware_utils_debug::ProcessingTimeDetail>(
+      "~/debug/pointcloud/processing_time_detail_ms", 1);
+  pointcloud_time_keeper_->add_reporter(pub_pointcloud_processing_time_detail_);
 
   debug_pose_publisher_ = std::make_shared<PredictedTrajectoryValidatorDebugMarkerPublisher>(this);
 
@@ -152,6 +168,28 @@ void PredictedTrajectoryValidator::on_lanelet_map(const LaneletMapBin::ConstShar
     autoware::experimental::lanelet2_utils::from_autoware_map_msgs(*msg));
 }
 
+void PredictedTrajectoryValidator::on_pointcloud(
+  const AUTOWARE_MESSAGE_CONST_SHARED_PTR(PointCloud2) & msg)
+{
+  if (!pointcloud_params_.collision_validator.enable_pointcloud) {
+    return;
+  }
+  if (param_listener_.is_old(pointcloud_params_)) {
+    pointcloud_params_ = param_listener_.get_params();
+    pointcloud_pipeline_.update_parameters(pointcloud_params_);
+  }
+
+  pointcloud_stop_watch_.tic();
+  {
+    autoware_utils_debug::ScopedTimeTrack st("pointcloud_pipeline", *pointcloud_time_keeper_);
+    pointcloud_pipeline_.process(*msg, sub_kinematics_for_pointcloud_->take_data(), vehicle_info_);
+  }
+  autoware_internal_debug_msgs::msg::Float64Stamped processing_time_msg;
+  processing_time_msg.stamp = get_clock()->now();
+  processing_time_msg.data = pointcloud_stop_watch_.toc();
+  pub_pointcloud_processing_time_->publish(processing_time_msg);
+}
+
 void PredictedTrajectoryValidator::on_predicted_trajectory(
   const AUTOWARE_MESSAGE_CONST_SHARED_PTR(Trajectory) & msg)
 {
@@ -185,7 +223,6 @@ void PredictedTrajectoryValidator::on_predicted_trajectory(
     return waiting(sub_measured_acc_->get_topic_name());
   }
   const auto objects_msg = sub_objects_->take_data();
-  const auto pointcloud_msg = sub_pointcloud_->take_data();
 
   HazardWarningSources hazard_sources;
 
@@ -206,7 +243,8 @@ void PredictedTrajectoryValidator::on_predicted_trajectory(
     }
     const auto now = get_clock()->now();
     collision_validator_.validate(
-      *msg, *kinematics_msg, objects_msg, vehicle_info_, pointcloud_msg, hazard_sources);
+      *msg, *kinematics_msg, objects_msg, vehicle_info_, pointcloud_pipeline_.latest(), now,
+      hazard_sources);
     const auto alert = hazard_warning_.make_alert(hazard_sources, vehicle_info_, now);
     const double hazard_processing_time_ms = hazard_stop_watch_.toc();
     if (alert) {
