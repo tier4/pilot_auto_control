@@ -14,8 +14,11 @@
 
 #include "test_utils.hpp"
 
+#include <sensor_msgs/point_cloud2_iterator.hpp>
+
 #include <gtest/gtest.h>
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -29,7 +32,7 @@ TEST(PointCloudPreprocessorTest, TwoBlobsGiveTwoPointClustersAndIsolatedPointIsD
   auto preprocessor = make_preprocessor();
   const auto cloud = make_cloud(two_blobs_and_an_isolated_point(), Layout::XYZIRC);
 
-  const auto & result = preprocessor.process(cloud, kOrigin, 10.0, 5.0, test_vehicle_info());
+  const auto & result = preprocessor.process(cloud, origin_odometry(), test_vehicle_info());
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->stamp, rclcpp::Time(cloud.header.stamp));
   const auto clusters = sorted_by_x(result->clusters);
@@ -71,7 +74,7 @@ TEST_P(RoiTest, OnlyClustersInsideTheRoiRemain)
   }
   auto preprocessor = make_preprocessor();
   const auto & result = preprocessor.process(
-    make_cloud(points, Layout::XYZIRC), kOrigin, GetParam().velocity, 5.0, test_vehicle_info());
+    make_cloud(points, Layout::XYZIRC), origin_odometry(GetParam().velocity), test_vehicle_info());
   ASSERT_TRUE(result.has_value());
   const auto clusters = sorted_by_x(result->clusters);
   const auto & expected = GetParam().expected_centroid_xs;
@@ -98,7 +101,7 @@ TEST(PointCloudPreprocessorTest, PointsInsideTheEgoFootprintAreDropped)
   add_blob(points, 5.0F, 0.0F);
   const auto cloud = make_cloud(points, Layout::XYZIRC);
 
-  const auto & result = preprocessor.process(cloud, kOrigin, 10.0, 5.0, test_vehicle_info());
+  const auto & result = preprocessor.process(cloud, origin_odometry(), test_vehicle_info());
   ASSERT_TRUE(result.has_value());
   ASSERT_EQ(result->clusters.size(), 1U);
   EXPECT_NEAR(result->clusters.front().centroid.x(), 5.2, 0.1);
@@ -111,13 +114,13 @@ TEST(PointCloudPreprocessorTest, HeightRangeFollowsVehicleInfo)
   add_blob(points, 5.0F, 0.0F, 2.7F);  // above a 2.5 m vehicle, below a 3.0 m vehicle
 
   auto low = make_preprocessor();
-  const auto & low_result = low.process(
-    make_cloud(points, Layout::XYZIRC), kOrigin, 10.0, 5.0, test_vehicle_info(1.0, 2.5));
+  const auto & low_result =
+    low.process(make_cloud(points, Layout::XYZIRC), origin_odometry(), test_vehicle_info(1.0, 2.5));
   ASSERT_TRUE(low_result.has_value());
   EXPECT_TRUE(low_result->clusters.empty());
 
   const auto & high_result = low.process(
-    make_cloud(points, Layout::XYZIRC, at(11.0)), kOrigin, 10.0, 5.0, test_vehicle_info(1.0, 3.0));
+    make_cloud(points, Layout::XYZIRC, at(11.0)), origin_odometry(), test_vehicle_info(1.0, 3.0));
   ASSERT_TRUE(high_result.has_value());
   EXPECT_EQ(high_result->clusters.size(), 1U);
 
@@ -125,52 +128,48 @@ TEST(PointCloudPreprocessorTest, HeightRangeFollowsVehicleInfo)
   param.z_margin_high = 0.5;
   auto margin = make_preprocessor(param);
   const auto & margin_result = margin.process(
-    make_cloud(points, Layout::XYZIRC), kOrigin, 10.0, 5.0, test_vehicle_info(1.0, 2.5));
+    make_cloud(points, Layout::XYZIRC), origin_odometry(), test_vehicle_info(1.0, 2.5));
   ASSERT_TRUE(margin_result.has_value());
   EXPECT_EQ(margin_result->clusters.size(), 1U);
 }
 
-TEST(PointCloudPreprocessorTest, RejectedFramesReturnThePreviousResult)
+struct RejectedCase
+{
+  std::string name;
+  std::function<sensor_msgs::msg::PointCloud2()> make_frame;
+};
+
+class RejectedFrameTest : public ::testing::TestWithParam<RejectedCase>
+{
+};
+
+TEST_P(RejectedFrameTest, RejectedFrameGivesNullopt)
 {
   auto preprocessor = make_preprocessor();
-  const auto points = two_blobs_and_an_isolated_point();
-  const auto vehicle_info = test_vehicle_info();
-
-  EXPECT_FALSE(
-    preprocessor
-      .process(
-        make_cloud(points, Layout::XYZIRC, at(10.0), "lidar_top"), kOrigin, 10.0, 5.0, vehicle_info)
-      .has_value());
-  EXPECT_FALSE(
-    preprocessor
-      .process(make_cloud(points, Layout::XYZIRC, at(10.0)), std::nullopt, 10.0, 5.0, vehicle_info)
-      .has_value());
-
-  const auto & processed = preprocessor.process(
-    make_cloud(points, Layout::XYZIRC, at(10.0)), kOrigin, 10.0, 5.0, vehicle_info);
-  ASSERT_TRUE(processed.has_value());
-  EXPECT_EQ(processed->clusters.size(), 2U);
-  const rclcpp::Time processed_stamp = processed->stamp;
-
-  std::vector<Xyz> one_blob;
-  add_blob(one_blob, 5.0F, 0.0F);
-  const auto expect_previous = [&](const std::optional<PointCloudClusters> & result) {
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->stamp, processed_stamp);
-    EXPECT_EQ(result->clusters.size(), 2U);
-  };
-  expect_previous(preprocessor.process(
-    make_cloud(one_blob, Layout::XYZIRC, at(10.0)), kOrigin, 10.0, 5.0, vehicle_info));
-  expect_previous(preprocessor.process(
-    make_cloud(one_blob, Layout::XYZIRC, at(11.0), "lidar_top"), kOrigin, 10.0, 5.0, vehicle_info));
-  expect_previous(preprocessor.process(
-    make_cloud(one_blob, Layout::XYZIRC, at(11.0)), std::nullopt, 10.0, 5.0, vehicle_info));
-
-  const auto & next = preprocessor.process(
-    make_cloud(one_blob, Layout::XYZIRC, at(11.0)), kOrigin, 10.0, 5.0, vehicle_info);
-  ASSERT_TRUE(next.has_value());
-  EXPECT_EQ(next->clusters.size(), 1U);
+  EXPECT_FALSE(preprocessor.process(GetParam().make_frame(), origin_odometry(), test_vehicle_info())
+                 .has_value());
 }
+
+INSTANTIATE_TEST_SUITE_P(
+  PointCloudPreprocessorTest, RejectedFrameTest,
+  ::testing::Values(
+    RejectedCase{
+      "FrameOtherThanBaseLink",
+      [] {
+        return make_cloud(two_blobs_and_an_isolated_point(), Layout::XYZIRC, at(10.0), "lidar_top");
+      }},
+    RejectedCase{
+      "NoXyzFields",
+      [] {
+        sensor_msgs::msg::PointCloud2 cloud;
+        cloud.header.stamp = at(10.0);
+        cloud.header.frame_id = "base_link";
+        sensor_msgs::PointCloud2Modifier modifier(cloud);
+        modifier.setPointCloud2Fields(1, "intensity", 1, sensor_msgs::msg::PointField::FLOAT32);
+        modifier.resize(1);
+        return cloud;
+      }}),
+  [](const ::testing::TestParamInfo<RejectedCase> & info) { return info.param.name; });
 
 TEST(PointCloudPreprocessorTest, EmptyFrameGivesNoClusters)
 {
@@ -178,19 +177,19 @@ TEST(PointCloudPreprocessorTest, EmptyFrameGivesNoClusters)
   const auto vehicle_info = test_vehicle_info();
 
   const auto & first =
-    preprocessor.process(make_cloud({}, Layout::XYZIRC, at(9.0)), kOrigin, 10.0, 5.0, vehicle_info);
+    preprocessor.process(make_cloud({}, Layout::XYZIRC, at(9.0)), origin_odometry(), vehicle_info);
   ASSERT_TRUE(first.has_value());
   EXPECT_EQ(first->stamp, rclcpp::Time(9'000'000'000, RCL_ROS_TIME));
   EXPECT_TRUE(first->clusters.empty());
 
   const auto & processed = preprocessor.process(
-    make_cloud(two_blobs_and_an_isolated_point(), Layout::XYZIRC, at(10.0)), kOrigin, 10.0, 5.0,
+    make_cloud(two_blobs_and_an_isolated_point(), Layout::XYZIRC, at(10.0)), origin_odometry(),
     vehicle_info);
   ASSERT_TRUE(processed.has_value());
   EXPECT_EQ(processed->clusters.size(), 2U);
 
-  const auto & empty = preprocessor.process(
-    make_cloud({}, Layout::XYZIRC, at(11.0)), kOrigin, 10.0, 5.0, vehicle_info);
+  const auto & empty =
+    preprocessor.process(make_cloud({}, Layout::XYZIRC, at(11.0)), origin_odometry(), vehicle_info);
   ASSERT_TRUE(empty.has_value());
   EXPECT_EQ(empty->stamp, rclcpp::Time(11'000'000'000, RCL_ROS_TIME));
   EXPECT_TRUE(empty->clusters.empty());
@@ -211,7 +210,7 @@ TEST(PointCloudPreprocessorTest, ClustersAreFilteredByTheirRawPointCount)
   }
   const auto cloud = make_cloud(points, Layout::XYZIRC);
 
-  const auto & result = preprocessor.process(cloud, kOrigin, 10.0, 5.0, test_vehicle_info());
+  const auto & result = preprocessor.process(cloud, origin_odometry(), test_vehicle_info());
   ASSERT_TRUE(result.has_value());
   ASSERT_EQ(result->clusters.size(), 1U);
   const auto & cluster = result->clusters.front();

@@ -117,52 +117,41 @@ double PointCloudPreprocessor::z_max(const vehicle_info_utils::VehicleInfo & veh
   return vehicle_info.max_height_offset_m + param_.z_margin_high;
 }
 
-const std::optional<PointCloudClusters> & PointCloudPreprocessor::process(
-  const sensor_msgs::msg::PointCloud2 & pointcloud,
-  const std::optional<geometry_msgs::msg::Pose> & ego_pose_at_pointcloud_stamp, const double v_ego,
-  const double horizon_s, const vehicle_info_utils::VehicleInfo & vehicle_info)
+std::optional<PointCloudClusters> PointCloudPreprocessor::process(
+  const sensor_msgs::msg::PointCloud2 & pointcloud, const nav_msgs::msg::Odometry & odom,
+  const vehicle_info_utils::VehicleInfo & vehicle_info)
 {
   try {
-    return process_frame(pointcloud, ego_pose_at_pointcloud_stamp, v_ego, horizon_s, vehicle_info);
+    return process_frame(pointcloud, odom, vehicle_info);
   } catch (const std::exception & e) {
     RCLCPP_WARN_THROTTLE(
       logger_, steady_clock_, 5000, "pointcloud preprocessing skipped: %s", e.what());
-    result_ = std::nullopt;
-    return result_;
+    return std::nullopt;
   }
 }
 
-const std::optional<PointCloudClusters> & PointCloudPreprocessor::process_frame(
-  const sensor_msgs::msg::PointCloud2 & pointcloud,
-  const std::optional<geometry_msgs::msg::Pose> & ego_pose_at_pointcloud_stamp, const double v_ego,
-  const double horizon_s, const vehicle_info_utils::VehicleInfo & vehicle_info)
+std::optional<PointCloudClusters> PointCloudPreprocessor::process_frame(
+  const sensor_msgs::msg::PointCloud2 & pointcloud, const nav_msgs::msg::Odometry & odom,
+  const vehicle_info_utils::VehicleInfo & vehicle_info)
 {
   const rclcpp::Time stamp(pointcloud.header.stamp);
-  if (result_ && result_->stamp == stamp) {
-    return result_;
-  }
   if (pointcloud.header.frame_id != kExpectedFrame) {
     RCLCPP_WARN_THROTTLE(
       logger_, steady_clock_, 5000, "pointcloud frame_id is '%s', expected '%s'. Frame dropped.",
       pointcloud.header.frame_id.c_str(), kExpectedFrame);
-    return result_;
-  }
-  if (!ego_pose_at_pointcloud_stamp) {
-    RCLCPP_WARN_THROTTLE(
-      logger_, steady_clock_, 5000, "no odometry close to the pointcloud stamp. Frame dropped.");
-    return result_;
+    return std::nullopt;
   }
   if (pointcloud.width * pointcloud.height == 0) {
-    result_ = PointCloudClusters{{}, stamp};
-    return result_;
+    return PointCloudClusters{{}, stamp};
   }
 
   // Ego-footprint exclusion and ROI crop, reading the fields by name so that any point layout is
   // accepted. The height bounds come from vehicle_info (base_link is on the ground plane).
-  const double x_min =
-    vehicle_info.min_longitudinal_offset_m - std::max(-v_ego, 0.0) * horizon_s - param_.roi_rear;
-  const double x_max = vehicle_info.max_longitudinal_offset_m + std::max(v_ego, 0.0) * horizon_s +
-                       param_.roi_front_margin;
+  const double v_ego = odom.twist.twist.linear.x;
+  const double x_min = vehicle_info.min_longitudinal_offset_m -
+                       std::max(-v_ego, 0.0) * param_.horizon - param_.roi_rear;
+  const double x_max = vehicle_info.max_longitudinal_offset_m +
+                       std::max(v_ego, 0.0) * param_.horizon + param_.roi_front_margin;
   const double z_low = z_min(vehicle_info);
   const double z_high = z_max(vehicle_info);
   Polygon2d footprint;
@@ -225,7 +214,7 @@ const std::optional<PointCloudClusters> & PointCloudPreprocessor::process_frame(
 
     // Points of each cluster (base_link) -> map through the ego pose at the pointcloud stamp.
     // Points that belong to no cluster are dropped.
-    const auto & ego_pose = *ego_pose_at_pointcloud_stamp;
+    const auto & ego_pose = odom.pose.pose;
     const double yaw = autoware_utils_geometry::get_rpy(ego_pose).z;
     const double cos_yaw = std::cos(yaw);
     const double sin_yaw = std::sin(yaw);
@@ -258,7 +247,6 @@ const std::optional<PointCloudClusters> & PointCloudPreprocessor::process_frame(
   }
   time_keeper_->end_track("clustering");
 
-  result_ = PointCloudClusters{std::move(clusters), stamp};
-  return result_;
+  return PointCloudClusters{std::move(clusters), stamp};
 }
 }  // namespace autoware::predicted_trajectory_validator::collision_validator

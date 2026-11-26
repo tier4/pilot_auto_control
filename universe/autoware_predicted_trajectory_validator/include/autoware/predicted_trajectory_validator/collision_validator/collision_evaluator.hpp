@@ -255,13 +255,13 @@ public:
    * collision with objects (footprint sweep) and static points. Only the objects and points that
    * are near or have a brake_level of 1 or more are returned.
    * @param objects nullptr evaluates no object
-   * @param point_clusters clusters in the map frame; nullopt evaluates no point
+   * @param point_clusters clusters in the map frame; nullptr evaluates no point
    */
   std::vector<CollisionCandidate> evaluate(
     const autoware_planning_msgs::msg::Trajectory & predicted_trajectory,
     const nav_msgs::msg::Odometry & odom, const vehicle_info_utils::VehicleInfo & vehicle_info,
     const autoware_perception_msgs::msg::PredictedObjects::ConstSharedPtr & objects,
-    const std::optional<PointCloudClusters> & point_clusters) const;
+    const std::shared_ptr<const PointCloudClusters> & point_clusters) const;
 
 private:
   friend class SweepsWithBraking;

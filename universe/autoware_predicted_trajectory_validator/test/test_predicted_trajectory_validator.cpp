@@ -22,6 +22,7 @@
 #include <autoware_adapi_v1_msgs/msg/operation_mode_state.hpp>
 #include <autoware_internal_control_msgs/msg/hazard_alert.hpp>
 #include <autoware_map_msgs/msg/lanelet_map_bin.hpp>
+#include <autoware_perception_msgs/msg/predicted_objects.hpp>
 #include <autoware_planning_msgs/msg/trajectory.hpp>
 #include <geometry_msgs/msg/accel_with_covariance_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -133,6 +134,8 @@ protected:
       std::string(kNs) + "/input/measured_acceleration", 1);
     pub_mode_ = helper_->create_publisher<OperationModeState>(
       std::string(kNs) + "/input/operational_mode_state", 1);
+    pub_objects_ = helper_->create_publisher<autoware_perception_msgs::msg::PredictedObjects>(
+      std::string(kNs) + "/input/objects", 1);
     sub_status_ = helper_->create_subscription<PredictedTrajectoryValidatorStatus>(
       std::string(kNs) + "/output/validation_status", 10,
       [this](const PredictedTrajectoryValidatorStatus::ConstSharedPtr msg) {
@@ -158,8 +161,12 @@ protected:
 
   void publish_inputs(
     const Trajectory & trajectory, const double time_s, const bool autonomous,
-    const bool with_kinematics = true, const bool with_acceleration = true)
+    const bool with_kinematics = true, const bool with_acceleration = true,
+    const bool with_objects = true)
   {
+    if (with_objects) {
+      pub_objects_->publish(autoware_perception_msgs::msg::PredictedObjects{});
+    }
     if (with_kinematics) {
       Odometry kinematics;
       kinematics.header.stamp = rclcpp::Time(static_cast<int64_t>(time_s * 1e9));
@@ -222,6 +229,7 @@ protected:
   rclcpp::Publisher<Odometry>::SharedPtr pub_kin_;
   rclcpp::Publisher<geometry_msgs::msg::AccelWithCovarianceStamped>::SharedPtr pub_acc_;
   rclcpp::Publisher<OperationModeState>::SharedPtr pub_mode_;
+  rclcpp::Publisher<autoware_perception_msgs::msg::PredictedObjects>::SharedPtr pub_objects_;
   rclcpp::Subscription<PredictedTrajectoryValidatorStatus>::SharedPtr sub_status_;
   rclcpp::Subscription<HazardAlert>::SharedPtr sub_alert_;
   std::vector<PredictedTrajectoryValidatorStatus> statuses_;
@@ -243,6 +251,16 @@ TEST_F(PredictedTrajectoryValidatorNodeTest, NothingIsValidatedWithoutAccelerati
   const auto trajectory = make_trajectory(0.0);
   publish_inputs(trajectory, 0.0, true, true, false);
   EXPECT_FALSE(trigger(trajectory, std::chrono::seconds(1)));
+  EXPECT_TRUE(alerts_.empty());
+}
+
+TEST_F(PredictedTrajectoryValidatorNodeTest, NoAlertWhileTheCollisionCannotBeEvaluated)
+{
+  start();
+  const auto trajectory = make_trajectory(0.0);
+  publish_inputs(trajectory, 0.0, true, true, true, false);
+  ASSERT_TRUE(trigger(trajectory, std::chrono::seconds(2)));
+  spin_for(std::chrono::milliseconds(100));
   EXPECT_TRUE(alerts_.empty());
 }
 

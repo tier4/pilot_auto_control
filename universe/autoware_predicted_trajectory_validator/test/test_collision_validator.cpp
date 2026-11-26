@@ -14,12 +14,11 @@
 
 #include "test_utils.hpp"
 
-#include <sensor_msgs/point_cloud2_iterator.hpp>
-
 #include <gtest/gtest.h>
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,72 +26,92 @@ namespace autoware::predicted_trajectory_validator
 {
 using namespace test_utils;  // NOLINT(build/namespaces)
 using autoware_internal_control_msgs::msg::HazardSector;
-using sensor_msgs::msg::PointCloud2;
 
-TEST(CollisionValidatorTest, NothingRaisedGivesAnEmptyArray)
-{
-  auto validator = make_validator();
-  const auto pose = make_pose(0.0, 0.0, 0.0);
-  const auto now = at(10.0);
-
-  auto short_trajectory = make_trajectory(now, pose);
-  short_trajectory.points.resize(1);
-  for (const auto & trajectory : {make_trajectory(now, pose), short_trajectory}) {
-    HazardWarningSources sources;
-    validator.validate(
-      trajectory, make_odom(now, pose), make_objects(now, {make_car(15.0, 5.0)}),
-      test_vehicle_info(), nullptr, sources);
-    ASSERT_TRUE(sources.collision.has_value());
-    EXPECT_TRUE(sources.collision->empty());
-  }
-}
-
-struct SkippedCase
+struct ValidateCase
 {
   std::string name;
   std::function<void(::predicted_trajectory_validator::Params &)> modify_params;
   std::function<void(Trajectory &)> modify_trajectory;
   bool with_objects;
-  bool with_cloud;
+  std::optional<double> cluster_age_s;  // nullopt gives no clusters
 };
 
-class CollisionSourcesUnsetTest : public ::testing::TestWithParam<SkippedCase>
-{
-};
-
-TEST_P(CollisionSourcesUnsetTest, CollisionSourcesAreLeftUnset)
+HazardWarningSources validate(const ValidateCase & c)
 {
   const auto pose = make_pose(0.0, 0.0, 0.0);
   const auto now = at(10.0);
   auto params = default_params();
-  GetParam().modify_params(params);
+  c.modify_params(params);
   auto trajectory = make_trajectory(now, pose);
-  GetParam().modify_trajectory(trajectory);
+  c.modify_trajectory(trajectory);
 
   auto validator = make_validator(params);
   HazardWarningSources sources;
   validator.validate(
     trajectory, make_odom(now, pose),
-    GetParam().with_objects ? make_objects(now, {make_car(15.0, 0.0)}) : nullptr,
-    test_vehicle_info(), GetParam().with_cloud ? make_cloud(now, 15.0) : nullptr, sources);
-  EXPECT_FALSE(sources.collision.has_value());
+    c.with_objects ? make_objects(now, {make_car(15.0, 0.0)}) : nullptr, test_vehicle_info(),
+    c.cluster_age_s ? make_clusters(now - rclcpp::Duration::from_seconds(*c.cluster_age_s))
+                    : nullptr,
+    now, sources);
+  return sources;
+}
+
+const auto kKeepParams = [](auto &) {};
+const auto kKeepTrajectory = [](auto &) {};
+const auto kShortTrajectory = [](auto & t) { t.points.resize(1); };
+
+class CollisionSourcesEmptyTest : public ::testing::TestWithParam<ValidateCase>
+{
+};
+
+TEST_P(CollisionSourcesEmptyTest, NothingRaisedGivesAnEmptyArray)
+{
+  const auto sources = validate(GetParam());
+  ASSERT_TRUE(sources.collision.has_value());
+  EXPECT_TRUE(sources.collision->empty());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+  CollisionValidatorTest, CollisionSourcesEmptyTest,
+  ::testing::Values(
+    ValidateCase{"NothingAhead", kKeepParams, kKeepTrajectory, false, 0.0},
+    ValidateCase{
+      "ShortTrajectoryWithoutInputs", kKeepParams, kShortTrajectory, false, std::nullopt},
+    ValidateCase{
+      "WarningDisabled", [](auto & p) { p.collision_validator.enable_warning = false; },
+      kKeepTrajectory, false, std::nullopt}),
+  [](const ::testing::TestParamInfo<ValidateCase> & info) { return info.param.name; });
+
+class CollisionSourcesUnsetTest : public ::testing::TestWithParam<ValidateCase>
+{
+};
+
+TEST_P(CollisionSourcesUnsetTest, CollisionSourcesAreLeftUnset)
+{
+  EXPECT_FALSE(validate(GetParam()).collision.has_value());
 }
 
 INSTANTIATE_TEST_SUITE_P(
   CollisionValidatorTest, CollisionSourcesUnsetTest,
   ::testing::Values(
-    SkippedCase{"NoInput", [](auto &) {}, [](auto &) {}, false, false},
-    SkippedCase{
-      "UnsortedTrajectory", [](auto &) {},
+    ValidateCase{
+      "UnsortedTrajectory", kKeepParams,
       [](auto & t) { t.points[1].time_from_start = rclcpp::Duration::from_seconds(100.0); }, true,
-      false},
-    SkippedCase{
-      "PointcloudDisabled", [](auto & p) { p.collision_validator.enable_pointcloud = false; },
-      [](auto &) {}, false, true},
-    SkippedCase{
-      "WarningDisabled", [](auto & p) { p.collision_validator.enable_warning = false; },
-      [](auto &) {}, true, true}),
-  [](const ::testing::TestParamInfo<SkippedCase> & info) { return info.param.name; });
+      0.0},
+    ValidateCase{"NoClusters", kKeepParams, kKeepTrajectory, true, std::nullopt},
+    ValidateCase{"StaleClusters", kKeepParams, kKeepTrajectory, true, 0.301},
+    ValidateCase{
+      "PointcloudDisabledWithoutObjects",
+      [](auto & p) { p.collision_validator.enable_pointcloud = false; }, kKeepTrajectory, false,
+      0.0}),
+  [](const ::testing::TestParamInfo<ValidateCase> & info) { return info.param.name; });
+
+TEST(CollisionValidatorTest, ClustersUpToMaxAgeAreEvaluated)
+{
+  const auto sources = validate(ValidateCase{"", kKeepParams, kKeepTrajectory, false, 0.3});
+  ASSERT_TRUE(sources.collision.has_value());
+  EXPECT_TRUE(sources.collision->empty());
+}
 
 TEST(CollisionValidatorTest, EitherInputAloneIsEvaluated)
 {
@@ -101,11 +120,13 @@ TEST(CollisionValidatorTest, EitherInputAloneIsEvaluated)
   const auto vehicle_info = test_vehicle_info();
 
   {
-    auto validator = make_validator(default_params());
+    auto params = default_params();
+    params.collision_validator.enable_pointcloud = false;
+    auto validator = make_validator(params);
     HazardWarningSources sources;
     validator.validate(
       make_trajectory(now, pose), make_odom(now, pose), make_objects(now, {make_car(15.0, 0.0)}),
-      vehicle_info, nullptr, sources);
+      vehicle_info, make_clusters(now, {15.0}), now, sources);
     ASSERT_TRUE(sources.collision.has_value());
     EXPECT_EQ(sources.collision->size(), 1U);
     EXPECT_EQ(count_points(*sources.collision), 0U);
@@ -115,54 +136,11 @@ TEST(CollisionValidatorTest, EitherInputAloneIsEvaluated)
     HazardWarningSources sources;
     validator.validate(
       make_trajectory(now, pose), make_odom(now, pose), nullptr, vehicle_info,
-      make_cloud(now, 15.0), sources);
+      make_clusters(now, {15.0}), now, sources);
     ASSERT_TRUE(sources.collision.has_value());
     EXPECT_FALSE(sources.collision->empty());
     EXPECT_EQ(count_points(*sources.collision), sources.collision->size());
   }
-}
-
-TEST(CollisionValidatorTest, PointcloudWithoutXyzIsSkippedAndObjectsAreStillEvaluated)
-{
-  const auto pose = make_pose(0.0, 0.0, 0.0);
-  const auto now = at(10.0);
-  auto cloud = std::make_shared<PointCloud2>();
-  cloud->header.stamp = now;
-  cloud->header.frame_id = "base_link";
-  sensor_msgs::PointCloud2Modifier modifier(*cloud);
-  modifier.setPointCloud2Fields(1, "intensity", 1, sensor_msgs::msg::PointField::FLOAT32);
-  modifier.resize(1);
-
-  auto validator = make_validator(default_params());
-  HazardWarningSources sources;
-  EXPECT_NO_THROW(validator.validate(
-    make_trajectory(now, pose), make_odom(now, pose), make_objects(now, {make_car(15.0, 0.0)}),
-    test_vehicle_info(), cloud, sources));
-  ASSERT_TRUE(sources.collision.has_value());
-  EXPECT_EQ(sources.collision->size(), 1U);
-  EXPECT_EQ(count_points(*sources.collision), 0U);
-}
-
-TEST(CollisionValidatorTest, PointcloudWithoutCloseOdometryIsDropped)
-{
-  const auto pose = make_pose(0.0, 0.0, 0.0);
-  const auto now = at(10.0);
-  const auto run = [&](const rclcpp::Time & cloud_stamp) {
-    auto validator = make_validator();
-    HazardWarningSources sources;
-    validator.validate(
-      make_trajectory(now, pose), make_odom(now, pose), make_objects(now, {}), test_vehicle_info(),
-      make_cloud(cloud_stamp, 15.0), sources);
-    return sources;
-  };
-
-  const auto close = run(at(9.95));
-  ASSERT_TRUE(close.collision.has_value());
-  EXPECT_FALSE(close.collision->empty());
-
-  const auto far = run(at(9.8));
-  ASSERT_TRUE(far.collision.has_value());
-  EXPECT_TRUE(far.collision->empty());
 }
 
 TEST(CollisionValidatorTest, NearCandidatesAreHandedOverAsProximityWithoutALevel)
@@ -174,8 +152,8 @@ TEST(CollisionValidatorTest, NearCandidatesAreHandedOverAsProximityWithoutALevel
   HazardWarningSources sources;
   validator.validate(
     make_trajectory(now, pose), make_odom(now, pose),
-    make_objects(now, {make_car(1.0, 1.648), make_car(1.0, -1.948)}), test_vehicle_info(), nullptr,
-    sources);
+    make_objects(now, {make_car(1.0, 1.648), make_car(1.0, -1.948)}), test_vehicle_info(),
+    make_clusters(now), now, sources);
   ASSERT_TRUE(sources.collision.has_value());
   ASSERT_EQ(sources.collision->size(), 1U);
   EXPECT_EQ(sources.collision->front().risk_level, HazardSector::NONE);

@@ -23,6 +23,7 @@ ament_auto_add_library(autoware_predicted_trajectory_validator_component SHARED
   src/collision_validator/collision_validator.cpp
   src/collision_validator/collision_evaluator.cpp
   src/collision_validator/pointcloud_preprocessor.cpp
+  src/collision_validator/pointcloud_pipeline.cpp
   src/hazard_warning/hazard_warning.cpp
 )
 target_include_directories(autoware_predicted_trajectory_validator_component
@@ -40,7 +41,7 @@ target_compile_options(autoware_predicted_trajectory_validator_component PUBLIC
 autoware_agnocast_wrapper_register_node(autoware_predicted_trajectory_validator_component
   PLUGIN "autoware::predicted_trajectory_validator::PredictedTrajectoryValidator"
   EXECUTABLE autoware_predicted_trajectory_validator_node
-  ROS2_EXECUTOR SingleThreadedExecutor
+  ROS2_EXECUTOR MultiThreadedExecutor
   AGNOCAST_EXECUTOR AgnocastOnlyCallbackIsolatedExecutor
 )
 

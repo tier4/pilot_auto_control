@@ -22,7 +22,7 @@
 #include <rclcpp/logger.hpp>
 #include <rclcpp/time.hpp>
 
-#include <geometry_msgs/msg/pose.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <cstddef>
@@ -42,6 +42,7 @@ struct PointCloudParam
   double roi_lateral{5.0};
   double z_margin_low{0.0};
   double z_margin_high{0.0};
+  double horizon{5.0};
   size_t max_voxels{20000};
   double voxel_size{0.10};
   double cluster_tolerance{0.30};
@@ -78,30 +79,23 @@ public:
   void update_parameters(const PointCloudParam & param);
 
   /**
-   * @brief Process a new frame and keep its clusters.
+   * @brief Process one frame into clusters.
    * @param pointcloud pointcloud in base_link
-   * @param ego_pose_at_pointcloud_stamp ego pose (map) at the pointcloud stamp
-   * @param v_ego ego longitudinal velocity [m/s]
-   * @param horizon_s evaluated time horizon, extends the ROI ahead (behind when reversing) by
-   *   |v_ego| * horizon_s [s]
+   * @param odom ego odometry (map) at the pointcloud stamp
    * @param vehicle_info height range and footprint of the ego vehicle
-   * @return clusters of the last processed frame; nullopt when no frame has been processed. The
-   *   same stamp as the last frame, a frame other than base_link or no ego pose is not processed.
-   *   An empty cloud gives no clusters. A frame that fails to be processed (e.g. no x / y / z
-   *   fields) gives nullopt.
+   * @return clusters of the frame. An empty cloud gives no clusters. A frame other than base_link
+   *   or a frame that fails to be processed (e.g. no x / y / z fields) gives nullopt.
    */
-  const std::optional<PointCloudClusters> & process(
-    const sensor_msgs::msg::PointCloud2 & pointcloud,
-    const std::optional<geometry_msgs::msg::Pose> & ego_pose_at_pointcloud_stamp, double v_ego,
-    double horizon_s, const vehicle_info_utils::VehicleInfo & vehicle_info);
+  std::optional<PointCloudClusters> process(
+    const sensor_msgs::msg::PointCloud2 & pointcloud, const nav_msgs::msg::Odometry & odom,
+    const vehicle_info_utils::VehicleInfo & vehicle_info);
 
   static constexpr const char * kExpectedFrame = "base_link";
 
 private:
-  const std::optional<PointCloudClusters> & process_frame(
-    const sensor_msgs::msg::PointCloud2 & pointcloud,
-    const std::optional<geometry_msgs::msg::Pose> & ego_pose_at_pointcloud_stamp, double v_ego,
-    double horizon_s, const vehicle_info_utils::VehicleInfo & vehicle_info);
+  std::optional<PointCloudClusters> process_frame(
+    const sensor_msgs::msg::PointCloud2 & pointcloud, const nav_msgs::msg::Odometry & odom,
+    const vehicle_info_utils::VehicleInfo & vehicle_info);
 
   double z_min(const vehicle_info_utils::VehicleInfo & vehicle_info) const;
   double z_max(const vehicle_info_utils::VehicleInfo & vehicle_info) const;
@@ -110,7 +104,6 @@ private:
   rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
   std::shared_ptr<autoware_utils_debug::TimeKeeper> time_keeper_;
   PointCloudParam param_;
-  std::optional<PointCloudClusters> result_;
 };
 }  // namespace autoware::predicted_trajectory_validator::collision_validator
 

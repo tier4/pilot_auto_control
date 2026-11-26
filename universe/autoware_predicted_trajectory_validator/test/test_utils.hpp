@@ -17,6 +17,7 @@
 
 #include "autoware/predicted_trajectory_validator/collision_validator/collision_evaluator.hpp"
 #include "autoware/predicted_trajectory_validator/collision_validator/collision_validator.hpp"
+#include "autoware/predicted_trajectory_validator/collision_validator/pointcloud_pipeline.hpp"
 #include "autoware/predicted_trajectory_validator/collision_validator/pointcloud_preprocessor.hpp"
 #include "autoware/predicted_trajectory_validator/hazard_warning/hazard_warning.hpp"
 
@@ -254,8 +255,8 @@ inline std::vector<CollisionCandidate> evaluate(
   const nav_msgs::msg::Odometry & odom, const PredictedObjects & objects,
   const std::vector<PointCluster> & clusters)
 {
-  const std::optional<PointCloudClusters> point_clusters =
-    PointCloudClusters{clusters, rclcpp::Time(kCloudStamp)};
+  const auto point_clusters = std::make_shared<const PointCloudClusters>(
+    PointCloudClusters{clusters, rclcpp::Time(kCloudStamp)});
   return CollisionEvaluator(param).evaluate(
     predicted, odom, test_vehicle_info(), std::make_shared<const PredictedObjects>(objects),
     point_clusters);
@@ -384,6 +385,7 @@ inline ::predicted_trajectory_validator::Params default_params()
   p.pointcloud.cluster_tolerance = 0.30;
   p.pointcloud.min_cluster_size = 10;
   p.pointcloud.max_stamp_gap_s = 0.1;
+  p.pointcloud.max_age_s = 0.3;
   params.hazard_warning.min_alert_duration = 0.5;
   return params;
 }
@@ -467,6 +469,7 @@ inline collision_validator::PointCloudParam default_pointcloud_param()
   param.roi_lateral = 5.0;
   param.z_margin_low = 0.0;
   param.z_margin_high = 0.0;
+  param.horizon = 5.0;
   param.max_voxels = 20000;
   param.voxel_size = 0.10;
   param.cluster_tolerance = 0.30;
@@ -481,7 +484,13 @@ inline collision_validator::PointCloudPreprocessor make_preprocessor(
     rclcpp::get_logger("test_pointcloud_preprocessor"), param);
 }
 
-inline const std::optional<geometry_msgs::msg::Pose> kOrigin = make_pose(0.0, 0.0, 0.0);
+// Odometry at the map origin with the given longitudinal velocity.
+inline nav_msgs::msg::Odometry origin_odometry(const double velocity = 10.0)
+{
+  auto odom = make_odometry(velocity);
+  odom.pose.pose = make_pose(0.0, 0.0, 0.0);
+  return odom;
+}
 
 inline std::vector<PointCluster> sorted_by_x(std::vector<PointCluster> clusters)
 {
@@ -546,12 +555,44 @@ inline PredictedObjects::ConstSharedPtr make_objects(
 }
 
 // 25 points (5 x 5 at 0.1 m spacing) from (x0, -0.2) in base_link.
-inline sensor_msgs::msg::PointCloud2::ConstSharedPtr make_cloud(
-  const rclcpp::Time & stamp, const double x0)
+inline sensor_msgs::msg::PointCloud2 make_cloud(const rclcpp::Time & stamp, const double x0)
 {
   std::vector<Xyz> points;
   add_blob(points, static_cast<float>(x0), -0.2F);
-  return std::make_shared<sensor_msgs::msg::PointCloud2>(make_cloud(points, Layout::XYZ, stamp));
+  return make_cloud(points, Layout::XYZ, stamp);
+}
+
+// Clusters of a pointcloud stamped at stamp; one 0.5 m x 0.5 m cluster from (x0, -0.25) in map
+// per element of xs.
+inline std::shared_ptr<const PointCloudClusters> make_clusters(
+  const rclcpp::Time & stamp, const std::vector<double> & xs = {})
+{
+  PointCloudClusters clusters{{}, stamp};
+  for (const auto x0 : xs) {
+    clusters.clusters.push_back(make_cluster(x0, x0 + 0.5, -0.25, 0.25));
+  }
+  return std::make_shared<const PointCloudClusters>(clusters);
+}
+
+// Pointcloud pipeline
+
+inline PointCloudPipeline make_pipeline(
+  const ::predicted_trajectory_validator::Params & params = default_params())
+{
+  return PointCloudPipeline(rclcpp::get_logger("test_pointcloud_pipeline"), params);
+}
+
+// Odometries at the map origin stamped at each of stamps_sec.
+inline std::vector<std::shared_ptr<const nav_msgs::msg::Odometry>> odometries_at(
+  const std::vector<double> & stamps_sec)
+{
+  std::vector<std::shared_ptr<const nav_msgs::msg::Odometry>> odometries;
+  for (const auto stamp_sec : stamps_sec) {
+    odometries.push_back(
+      std::make_shared<const nav_msgs::msg::Odometry>(
+        make_odom(at(stamp_sec), make_pose(0.0, 0.0, 0.0))));
+  }
+  return odometries;
 }
 
 inline size_t count_points(const std::vector<HazardSource> & sources)
@@ -599,6 +640,7 @@ inline HazardWarningSources collision_only(const std::vector<HazardSource> & sou
 {
   HazardWarningSources hazard_sources;
   hazard_sources.collision = sources;
+  hazard_sources.departure.emplace();
   return hazard_sources;
 }
 }  // namespace autoware::predicted_trajectory_validator::test_utils

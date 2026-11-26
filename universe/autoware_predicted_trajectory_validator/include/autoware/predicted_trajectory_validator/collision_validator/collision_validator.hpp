@@ -28,20 +28,16 @@
 
 #include <autoware_perception_msgs/msg/predicted_objects.hpp>
 #include <autoware_planning_msgs/msg/trajectory.hpp>
-#include <geometry_msgs/msg/pose.hpp>
 #include <nav_msgs/msg/odometry.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
 
-#include <deque>
 #include <memory>
-#include <optional>
 #include <vector>
 
 namespace autoware::predicted_trajectory_validator
 {
 /**
- * @brief Entry of the collision warning: odometry history, pointcloud preprocessing,
- * collision evaluation, and the hand-over of the candidates to raise to HazardWarning.
+ * @brief Entry of the collision warning: freshness of the pointcloud clusters, collision
+ * evaluation, and the hand-over of the candidates to raise to HazardWarning.
  */
 class CollisionValidator
 {
@@ -54,35 +50,30 @@ public:
   void update_parameters(const ::predicted_trajectory_validator::Params & params);
 
   /**
-   * @brief Evaluate one cycle with whichever of objects / pointcloud is available and write
-   * hazard_sources.collision (an empty vector when nothing is raised). hazard_sources.collision is
-   * left untouched when neither input is available.
+   * @brief Evaluate one cycle and write hazard_sources.collision: an empty vector when nothing is
+   * raised, the warning is disabled or the predicted trajectory has less than 2 points.
+   * hazard_sources.collision is left unset when the cycle cannot be evaluated.
    * @param objects latest objects; may be null
-   * @param pointcloud latest pointcloud; may be null
+   * @param clusters latest pointcloud clusters; may be null
+   * @param now current time, compared with the cluster stamp
    */
   void validate(
     const autoware_planning_msgs::msg::Trajectory & predicted_trajectory,
     const nav_msgs::msg::Odometry & odom,
     const autoware_perception_msgs::msg::PredictedObjects::ConstSharedPtr & objects,
     const vehicle_info_utils::VehicleInfo & vehicle_info,
-    const sensor_msgs::msg::PointCloud2::ConstSharedPtr & pointcloud,
-    HazardWarningSources & hazard_sources);
+    const std::shared_ptr<const collision_validator::PointCloudClusters> & clusters,
+    const rclcpp::Time & now, HazardWarningSources & hazard_sources);
 
 private:
-  void update_history(const nav_msgs::msg::Odometry & odom);
-  std::optional<geometry_msgs::msg::Pose> select_ego_pose_at(const rclcpp::Time & stamp) const;
   static std::vector<HazardSource> to_hazard_sources(
     const std::vector<collision_validator::CollisionCandidate> & candidates,
     const nav_msgs::msg::Odometry & odom);
-
-  static constexpr size_t kOdometryHistorySize = 10;
 
   rclcpp::Logger logger_;
   rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
   std::shared_ptr<autoware_utils_debug::TimeKeeper> time_keeper_;
   ::predicted_trajectory_validator::Params::CollisionValidator params_;
-  std::deque<nav_msgs::msg::Odometry> odometry_history_;
-  collision_validator::PointCloudPreprocessor pointcloud_preprocessor_;
   collision_validator::CollisionEvaluator collision_evaluator_;
 };
 }  // namespace autoware::predicted_trajectory_validator

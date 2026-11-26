@@ -860,7 +860,7 @@ std::vector<CollisionCandidate> CollisionEvaluator::evaluate(
   const autoware_planning_msgs::msg::Trajectory & predicted_trajectory,
   const nav_msgs::msg::Odometry & odom, const vehicle_info_utils::VehicleInfo & vehicle_info,
   const autoware_perception_msgs::msg::PredictedObjects::ConstSharedPtr & objects,
-  const std::optional<PointCloudClusters> & point_clusters) const
+  const std::shared_ptr<const PointCloudClusters> & point_clusters) const
 {
   std::vector<CollisionCandidate> candidates;
   if (predicted_trajectory.points.size() < 2 || !(param_.time_resolution > 0.0)) {

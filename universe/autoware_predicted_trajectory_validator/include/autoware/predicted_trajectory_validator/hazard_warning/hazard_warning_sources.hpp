@@ -36,7 +36,7 @@ struct HazardSource
 
 struct HazardWarningSources
 {
-  std::optional<std::vector<HazardSource>> collision;  // nullopt when not evaluated this cycle
+  std::optional<std::vector<HazardSource>> collision;  // nullopt when it could not be evaluated
   std::optional<std::vector<HazardSource>> departure;
 };
 }  // namespace autoware::predicted_trajectory_validator
