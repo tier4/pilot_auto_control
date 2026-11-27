@@ -102,7 +102,7 @@ INSTANTIATE_TEST_SUITE_P(
     ValidateCase{"StaleClusters", kKeepParams, kKeepTrajectory, true, 0.301},
     ValidateCase{
       "PointcloudDisabledWithoutObjects",
-      [](auto & p) { p.collision_validator.enable_pointcloud = false; }, kKeepTrajectory, false,
+      [](auto & p) { p.collision_validator.pointcloud.enable = false; }, kKeepTrajectory, false,
       0.0}),
   [](const ::testing::TestParamInfo<ValidateCase> & info) { return info.param.name; });
 
@@ -121,7 +121,7 @@ TEST(CollisionValidatorTest, EitherInputAloneIsEvaluated)
 
   {
     auto params = default_params();
-    params.collision_validator.enable_pointcloud = false;
+    params.collision_validator.pointcloud.enable = false;
     auto validator = make_validator(params);
     HazardWarningSources sources;
     validator.validate(

@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -40,6 +41,13 @@ TEST(PointCloudPipelineTest, ProcessedFrameReplacesTheLatestAndRejectedFrameKeep
   pipeline.process(other_frame, {}, vehicle_info);
   pipeline.process(make_cloud(at(10.5), 15.0), {}, vehicle_info);
   EXPECT_EQ(pipeline.latest(), processed);
+}
+
+TEST(PointCloudPipelineTest, UnknownClassNameThrows)
+{
+  auto params = default_params();
+  params.collision_validator.pointcloud.enabled_classes = {"structure", "tree"};
+  EXPECT_THROW(make_pipeline(params), std::invalid_argument);
 }
 
 struct OdometryCase

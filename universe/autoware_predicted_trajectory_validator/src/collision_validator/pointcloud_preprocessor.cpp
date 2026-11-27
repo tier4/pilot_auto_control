@@ -27,9 +27,15 @@
 #include <pcl/segmentation/extract_clusters.h>
 
 #include <algorithm>
+#include <array>
+#include <bitset>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
+#include <map>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -39,11 +45,21 @@ namespace autoware::predicted_trajectory_validator::collision_validator
 namespace
 {
 using autoware_utils_geometry::Point3d;
+using sensor_msgs::msg::PointField;
+
+constexpr const char * kClassIdField = "class_id";
+
+struct ClassifiedPoint
+{
+  Point3d point;
+  uint8_t class_id;
+};
 
 struct Voxel
 {
   Point3d centroid;
   size_t raw_point_count;
+  PointCloudClassification classification;
 };
 
 struct Roi
@@ -56,17 +72,46 @@ struct Roi
   Polygon2d footprint;
 };
 
-// Ego-footprint exclusion and ROI crop, reading the fields by name so that any point layout is
-// accepted.
-std::vector<Point3d> extract_points_in_roi(
-  const sensor_msgs::msg::PointCloud2 & pointcloud, const Roi & roi)
+bool has_point_field(
+  const sensor_msgs::msg::PointCloud2 & pointcloud, const std::string & field_name,
+  const uint8_t datatype, const uint32_t size)
 {
-  std::vector<Point3d> cropped_pointcloud;
+  const auto it = std::find_if(
+    pointcloud.fields.begin(), pointcloud.fields.end(),
+    [&](const auto & field) { return field.name == field_name; });
+  return it != pointcloud.fields.end() && it->datatype == datatype && it->count == 1U &&
+         it->offset <= pointcloud.point_step && size <= pointcloud.point_step - it->offset;
+}
+
+// Same layout conditions as the vegetation pointcloud of autoware_mppi_optimizer.
+bool has_supported_layout(const sensor_msgs::msg::PointCloud2 & pointcloud)
+{
+  const bool contiguous =
+    pointcloud.point_step > 0U &&
+    static_cast<size_t>(pointcloud.row_step) ==
+      static_cast<size_t>(pointcloud.width) * pointcloud.point_step &&
+    pointcloud.data.size() == static_cast<size_t>(pointcloud.row_step) * pointcloud.height;
+  return contiguous && !pointcloud.is_bigendian &&
+         has_point_field(pointcloud, "x", PointField::FLOAT32, 4U) &&
+         has_point_field(pointcloud, "y", PointField::FLOAT32, 4U) &&
+         has_point_field(pointcloud, "z", PointField::FLOAT32, 4U) &&
+         has_point_field(pointcloud, kClassIdField, PointField::UINT8, 1U);
+}
+
+// Ego-footprint exclusion, ROI crop and class selection.
+std::vector<ClassifiedPoint> extract_points_in_roi(
+  const sensor_msgs::msg::PointCloud2 & pointcloud, const Roi & roi,
+  const std::bitset<kNumPointCloudClassIds> & target_class_mask)
+{
+  std::vector<ClassifiedPoint> cropped_pointcloud;
   cropped_pointcloud.reserve(pointcloud.width * pointcloud.height);
   sensor_msgs::PointCloud2ConstIterator<float> it_x(pointcloud, "x");
   sensor_msgs::PointCloud2ConstIterator<float> it_y(pointcloud, "y");
   sensor_msgs::PointCloud2ConstIterator<float> it_z(pointcloud, "z");
-  for (; it_x != it_x.end(); ++it_x, ++it_y, ++it_z) {
+  sensor_msgs::PointCloud2ConstIterator<uint8_t> it_class_id(pointcloud, kClassIdField);
+  for (; it_x != it_x.end(); ++it_x, ++it_y, ++it_z, ++it_class_id) {
+    const uint8_t class_id = *it_class_id;
+    if (!target_class_mask[class_id]) continue;
     const float x = *it_x;
     const float y = *it_y;
     const float z = *it_z;
@@ -75,22 +120,25 @@ std::vector<Point3d> extract_points_in_roi(
     if (std::abs(y) > roi.lateral) continue;
     if (z < roi.z_low || z >= roi.z_high) continue;
     if (boost::geometry::within(Point2d{x, y}, roi.footprint)) continue;
-    cropped_pointcloud.emplace_back(x, y, z);
+    cropped_pointcloud.push_back(ClassifiedPoint{Point3d{x, y, z}, class_id});
   }
   return cropped_pointcloud;
 }
 
+// Points of different classes in the same cell are kept in different voxels.
 std::vector<Voxel> voxelize(
-  const std::vector<Point3d> & cropped_pointcloud, const double voxel_size)
+  const std::vector<ClassifiedPoint> & cropped_pointcloud, const double voxel_size)
 {
-  constexpr int64_t kGridOffset = int64_t{1} << 20;
-  constexpr uint64_t kAxisMask = (uint64_t{1} << 21) - 1;
+  constexpr int kAxisBits = 18;
+  constexpr int64_t kGridOffset = int64_t{1} << (kAxisBits - 1);
+  constexpr uint64_t kAxisMask = (uint64_t{1} << kAxisBits) - 1;
   struct Accumulator
   {
     double sum_x{0.0};
     double sum_y{0.0};
     double sum_z{0.0};
     size_t count{0};
+    uint8_t class_id{0};
   };
 
   const double inverse_voxel_size = 1.0 / voxel_size;
@@ -103,11 +151,14 @@ std::vector<Voxel> voxelize(
   std::unordered_map<uint64_t, size_t> index_of_key;
   index_of_key.reserve(cropped_pointcloud.size());
   std::vector<Accumulator> accumulators;
-  for (const auto & p : cropped_pointcloud) {
-    const uint64_t key = grid_key(p.x()) | (grid_key(p.y()) << 21) | (grid_key(p.z()) << 42);
+  for (const auto & [p, class_id] : cropped_pointcloud) {
+    const uint64_t key = grid_key(p.x()) | (grid_key(p.y()) << kAxisBits) |
+                         (grid_key(p.z()) << (2 * kAxisBits)) |
+                         (static_cast<uint64_t>(class_id) << (3 * kAxisBits));
     const auto [it, inserted] = index_of_key.try_emplace(key, accumulators.size());
     if (inserted) {
       accumulators.emplace_back();
+      accumulators.back().class_id = class_id;
     }
     auto & accumulator = accumulators[it->second];
     accumulator.sum_x += p.x();
@@ -123,7 +174,7 @@ std::vector<Voxel> voxelize(
     voxels.push_back(
       Voxel{
         Point3d{accumulator.sum_x / n, accumulator.sum_y / n, accumulator.sum_z / n},
-        accumulator.count});
+        accumulator.count, static_cast<PointCloudClassification>(accumulator.class_id)});
   }
   return voxels;
 }
@@ -189,6 +240,7 @@ std::vector<PointCluster> to_map_clusters(
       continue;
     }
     PointCluster cluster;
+    cluster.classification = voxels[static_cast<size_t>(indices.indices.front())].classification;
     cluster.raw_point_count = raw_point_count;
     cluster.points.reserve(indices.indices.size());
     double sum_x = 0.0;
@@ -207,7 +259,45 @@ std::vector<PointCluster> to_map_clusters(
   }
   return clusters;
 }
+
+std::map<PointCloudClassification, std::vector<Voxel>> split_by_class(
+  const std::vector<Voxel> & voxels)
+{
+  std::map<PointCloudClassification, std::vector<Voxel>> voxels_by_class;
+  for (const auto & voxel : voxels) {
+    voxels_by_class[voxel.classification].push_back(voxel);
+  }
+  return voxels_by_class;
+}
 }  // namespace
+
+// TODO(h.sugahara): use autoware::point_types::to_pointcloud_classification once the cores without
+// it (v4.4) are no longer supported.
+std::optional<PointCloudClassification> pointcloud_class_from_name(const std::string & name)
+{
+  using C = PointCloudClassification;
+  static const std::array<std::pair<std::string_view, C>, 13> kNames{{
+    {"car", C::CAR},
+    {"truck", C::TRUCK},
+    {"bus", C::BUS},
+    {"motorcycle", C::MOTORCYCLE},
+    {"bicycle", C::BICYCLE},
+    {"pedestrian", C::PEDESTRIAN},
+    {"animal", C::ANIMAL},
+    {"hazard", C::HAZARD},
+    {"flat_surface", C::FLAT_SURFACE},
+    {"structure", C::STRUCTURE},
+    {"vegetation", C::VEGETATION},
+    {"noise", C::NOISE},
+    {"invalid", C::INVALID},
+  }};
+  const auto it = std::find_if(
+    kNames.begin(), kNames.end(), [&](const auto & entry) { return entry.first == name; });
+  if (it == kNames.end()) {
+    return std::nullopt;
+  }
+  return it->second;
+}
 
 PointCloudPreprocessor::PointCloudPreprocessor(
   const rclcpp::Logger & logger, const PointCloudParam & param,
@@ -258,6 +348,19 @@ std::optional<PointCloudClusters> PointCloudPreprocessor::process_frame(
   if (pointcloud.width * pointcloud.height == 0) {
     return PointCloudClusters{{}, stamp};
   }
+  const bool has_class_id = std::any_of(
+    pointcloud.fields.begin(), pointcloud.fields.end(),
+    [](const auto & field) { return field.name == kClassIdField; });
+  if (!has_class_id) {
+    // TODO(h.sugahara): treat this as a failure once the planning simulator publishes class_id.
+    RCLCPP_ERROR_ONCE(logger_, "pointcloud has no class_id field. No cluster is evaluated.");
+    return PointCloudClusters{{}, stamp};
+  }
+  if (!has_supported_layout(pointcloud)) {
+    RCLCPP_WARN_THROTTLE(
+      logger_, steady_clock_, 5000, "pointcloud has an unsupported layout. Frame dropped.");
+    return std::nullopt;
+  }
 
   // The height bounds come from vehicle_info (base_link is on the ground plane).
   const double v_ego = odom.twist.twist.linear.x;
@@ -274,14 +377,17 @@ std::optional<PointCloudClusters> PointCloudPreprocessor::process_frame(
 
   time_keeper_->start_track("crop_and_voxelize");
   const auto voxels = subsample(
-    voxelize(extract_points_in_roi(pointcloud, roi), param_.voxel_size), param_.max_voxels);
+    voxelize(extract_points_in_roi(pointcloud, roi, param_.target_class_mask), param_.voxel_size),
+    param_.max_voxels);
   time_keeper_->end_track("crop_and_voxelize");
 
   time_keeper_->start_track("clustering");
   std::vector<PointCluster> clusters;
-  if (!voxels.empty()) {
-    clusters = to_map_clusters(
-      voxels, cluster(voxels, param_.cluster_tolerance), odom.pose.pose, param_.min_cluster_size);
+  for (const auto & [classification, class_voxels] : split_by_class(voxels)) {
+    auto class_clusters = to_map_clusters(
+      class_voxels, cluster(class_voxels, param_.cluster_tolerance), odom.pose.pose,
+      param_.min_cluster_size);
+    std::move(class_clusters.begin(), class_clusters.end(), std::back_inserter(clusters));
   }
   time_keeper_->end_track("clustering");
 

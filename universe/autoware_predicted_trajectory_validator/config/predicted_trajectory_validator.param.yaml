@@ -41,13 +41,12 @@
       proximity_distance: 0.3
       vehicle_yaw:
         rear_axle_ratio: 0.3
-      enabled_object_classes: [car, truck, bus, trailer, motorcycle, bicycle, pedestrian]
-      enable_pointcloud: false
-      max_evaluations:
-        object: 10
-        pointcloud: 10
-      max_objects_stamp_gap_s: 0.5
+      object:
+        enabled_classes: [car, truck, bus, trailer, motorcycle, bicycle, pedestrian]
+        max_evaluations: 10
+        max_stamp_gap_s: 0.5
       pointcloud:
+        enable: false
         roi:
           rear: 2.0
           front_margin: 2.0
@@ -59,4 +58,6 @@
         cluster_tolerance: 0.30
         min_cluster_size: 10
         max_stamp_gap_s: 0.1
-        max_age_s: 0.3
+        max_age_s: 1.7
+        enabled_classes: [structure, vegetation]
+        max_evaluations_per_class: 10

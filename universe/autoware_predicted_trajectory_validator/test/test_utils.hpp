@@ -57,6 +57,7 @@ using autoware_utils_geometry::Point2d;
 using collision_validator::CollisionCandidate;
 using collision_validator::CollisionEvaluator;
 using collision_validator::CollisionEvaluatorParam;
+using collision_validator::PointCloudClassification;
 using collision_validator::PointCloudClusters;
 using collision_validator::PointCluster;
 using collision_validator::detail::PoseTrajectory;
@@ -235,7 +236,7 @@ inline CollisionEvaluatorParam default_param()
   param.max_time = 5.0;
   param.time_resolution = kDt;
   param.n_eval_object = 10;
-  param.n_eval_pointcloud = 10;
+  param.n_eval_pointcloud_per_class = 10;
   param.enabled_labels = {
     ObjectClassification::UNKNOWN, ObjectClassification::CAR, ObjectClassification::PEDESTRIAN};
   param.max_objects_stamp_gap_s = 0.5;
@@ -369,12 +370,11 @@ inline ::predicted_trajectory_validator::Params default_params()
   p.stop_velocity = 0.1;
   p.proximity_distance = 0.3;
   p.vehicle_yaw.rear_axle_ratio = 0.3;
-  p.enabled_object_classes = {"car",        "truck",   "bus",       "trailer",
+  p.pointcloud.enable = true;
+  p.object.enabled_classes = {"car",        "truck",   "bus",       "trailer",
                               "motorcycle", "bicycle", "pedestrian"};
-  p.enable_pointcloud = true;
-  p.max_evaluations.object = 10;
-  p.max_evaluations.pointcloud = 10;
-  p.max_objects_stamp_gap_s = 0.5;
+  p.object.max_evaluations = 10;
+  p.object.max_stamp_gap_s = 0.5;
   p.pointcloud.roi.rear = 2.0;
   p.pointcloud.roi.front_margin = 2.0;
   p.pointcloud.roi.lateral = 5.0;
@@ -386,6 +386,8 @@ inline ::predicted_trajectory_validator::Params default_params()
   p.pointcloud.min_cluster_size = 10;
   p.pointcloud.max_stamp_gap_s = 0.1;
   p.pointcloud.max_age_s = 0.3;
+  p.pointcloud.enabled_classes = {"structure", "vegetation"};
+  p.pointcloud.max_evaluations_per_class = 10;
   params.hazard_warning.min_alert_duration = 0.5;
   return params;
 }
@@ -397,9 +399,11 @@ struct Xyz
   float x;
   float y;
   float z;
+  PointCloudClassification classification{PointCloudClassification::STRUCTURE};
 };
 
-enum class Layout { XYZ, XYZIRC, XYZIRCAEDT };
+// XYZCPE is the obstacle pointcloud with class_id (PointXYZCPE); XYZIRC has no class_id.
+enum class Layout { XYZIRC, XYZCPE };
 
 inline sensor_msgs::msg::PointCloud2 make_cloud(
   const std::vector<Xyz> & points, const Layout layout, const rclcpp::Time & stamp = at(10.0),
@@ -410,19 +414,16 @@ inline sensor_msgs::msg::PointCloud2 make_cloud(
   cloud.header.frame_id = frame_id;
   sensor_msgs::PointCloud2Modifier modifier(cloud);
   using sensor_msgs::msg::PointField;
-  if (layout == Layout::XYZ) {
-    modifier.setPointCloud2FieldsByString(1, "xyz");
-  } else if (layout == Layout::XYZIRC) {
+  if (layout == Layout::XYZIRC) {
     modifier.setPointCloud2Fields(
       6, "x", 1, PointField::FLOAT32, "y", 1, PointField::FLOAT32, "z", 1, PointField::FLOAT32,
       "intensity", 1, PointField::UINT8, "return_type", 1, PointField::UINT8, "channel", 1,
       PointField::UINT16);
   } else {
     modifier.setPointCloud2Fields(
-      10, "x", 1, PointField::FLOAT32, "y", 1, PointField::FLOAT32, "z", 1, PointField::FLOAT32,
-      "intensity", 1, PointField::UINT8, "return_type", 1, PointField::UINT8, "channel", 1,
-      PointField::UINT16, "azimuth", 1, PointField::FLOAT32, "elevation", 1, PointField::FLOAT32,
-      "distance", 1, PointField::FLOAT32, "time_stamp", 1, PointField::UINT32);
+      6, "x", 1, PointField::FLOAT32, "y", 1, PointField::FLOAT32, "z", 1, PointField::FLOAT32,
+      "class_id", 1, PointField::UINT8, "probability", 1, PointField::FLOAT32, "entropy", 1,
+      PointField::FLOAT32);
   }
   modifier.resize(points.size());
   sensor_msgs::PointCloud2Iterator<float> it_x(cloud, "x");
@@ -436,6 +437,13 @@ inline sensor_msgs::msg::PointCloud2 make_cloud(
     ++it_y;
     ++it_z;
   }
+  if (layout == Layout::XYZCPE) {
+    sensor_msgs::PointCloud2Iterator<uint8_t> it_class_id(cloud, "class_id");
+    for (const auto & p : points) {
+      *it_class_id = static_cast<uint8_t>(p.classification);
+      ++it_class_id;
+    }
+  }
   cloud.height = 1;
   cloud.width = points.size();
   return cloud;
@@ -443,11 +451,12 @@ inline sensor_msgs::msg::PointCloud2 make_cloud(
 
 // 5 x 5 grid at 0.1 m spacing, 25 points.
 inline void add_blob(
-  std::vector<Xyz> & points, const float x0, const float y0, const float z = 1.0F)
+  std::vector<Xyz> & points, const float x0, const float y0, const float z = 1.0F,
+  const PointCloudClassification classification = PointCloudClassification::STRUCTURE)
 {
   for (int i = 0; i < 5; ++i) {
     for (int j = 0; j < 5; ++j) {
-      points.push_back({x0 + 0.1F * i, y0 + 0.1F * j, z});
+      points.push_back({x0 + 0.1F * i, y0 + 0.1F * j, z, classification});
     }
   }
 }
@@ -474,6 +483,8 @@ inline collision_validator::PointCloudParam default_pointcloud_param()
   param.voxel_size = 0.10;
   param.cluster_tolerance = 0.30;
   param.min_cluster_size = 3;
+  param.target_class_mask.set(static_cast<size_t>(PointCloudClassification::STRUCTURE));
+  param.target_class_mask.set(static_cast<size_t>(PointCloudClassification::VEGETATION));
   return param;
 }
 
@@ -559,7 +570,7 @@ inline sensor_msgs::msg::PointCloud2 make_cloud(const rclcpp::Time & stamp, cons
 {
   std::vector<Xyz> points;
   add_blob(points, static_cast<float>(x0), -0.2F);
-  return make_cloud(points, Layout::XYZ, stamp);
+  return make_cloud(points, Layout::XYZCPE, stamp);
 }
 
 // Clusters of a pointcloud stamped at stamp; one 0.5 m x 0.5 m cluster from (x0, -0.25) in map

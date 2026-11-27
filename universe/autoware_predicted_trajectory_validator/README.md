@@ -26,6 +26,8 @@ The hazard alert is not published in a cycle where the collision or the departur
 | `~/input/objects`                | autoware_perception_msgs/PredictedObjects | objects for the collision check                 |
 | `~/input/pointcloud`             | sensor_msgs/PointCloud2                   | obstacle pointcloud for the collision check     |
 
+`~/input/pointcloud` must be the obstacle pointcloud whose `class_id` field holds `autoware::point_types::PointCloudClassification` values. A pointcloud without `class_id` gives no clusters.
+
 ### Output
 
 | Name                                           | Type                                                                       | Description                                                                        |

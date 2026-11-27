@@ -171,7 +171,7 @@ void PredictedTrajectoryValidator::on_lanelet_map(const LaneletMapBin::ConstShar
 void PredictedTrajectoryValidator::on_pointcloud(
   const AUTOWARE_MESSAGE_CONST_SHARED_PTR(PointCloud2) & msg)
 {
-  if (!pointcloud_params_.collision_validator.enable_pointcloud) {
+  if (!pointcloud_params_.collision_validator.pointcloud.enable) {
     return;
   }
   if (param_listener_.is_old(pointcloud_params_)) {

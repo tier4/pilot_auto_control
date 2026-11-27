@@ -64,17 +64,17 @@ CollisionEvaluatorParam to_collision_evaluator_param(
   CollisionEvaluatorParam out;
   out.max_time = params.prediction_horizon;
   out.time_resolution = params.time_resolution;
-  out.n_eval_object = static_cast<size_t>(std::max<int64_t>(params.max_evaluations.object, 0));
-  out.n_eval_pointcloud =
-    static_cast<size_t>(std::max<int64_t>(params.max_evaluations.pointcloud, 0));
-  out.max_objects_stamp_gap_s = params.max_objects_stamp_gap_s;
+  out.n_eval_object = static_cast<size_t>(std::max<int64_t>(params.object.max_evaluations, 0));
+  out.n_eval_pointcloud_per_class =
+    static_cast<size_t>(std::max<int64_t>(params.pointcloud.max_evaluations_per_class, 0));
+  out.max_objects_stamp_gap_s = params.object.max_stamp_gap_s;
   out.stop_velocity = params.stop_velocity;
   out.proximity_distance = params.proximity_distance;
   std::copy_n(params.braking.reaction_times.begin(), 3, out.reaction_times.begin());
   out.braking_deceleration = params.braking.deceleration;
   out.cos_threshold = params.collision_cos_threshold;
   out.rear_axle_ratio = params.vehicle_yaw.rear_axle_ratio;
-  for (const auto & name : params.enabled_object_classes) {
+  for (const auto & name : params.object.enabled_classes) {
     if (const auto label = label_from_name(name)) {
       out.enabled_labels.push_back(*label);
     }
@@ -158,7 +158,7 @@ void CollisionValidator::validate(
   }
 
   std::shared_ptr<const PointCloudClusters> evaluated_clusters;
-  if (params_.enable_pointcloud) {
+  if (params_.pointcloud.enable) {
     if (!clusters || (now - clusters->stamp).seconds() > params_.pointcloud.max_age_s) {
       RCLCPP_WARN_THROTTLE(
         logger_, steady_clock_, 5000,
