@@ -224,7 +224,7 @@ struct CollisionEvaluatorParam
   double max_time{5.0};
   double time_resolution{0.1};
   size_t n_eval_object{10};
-  size_t n_eval_pointcloud{10};
+  size_t n_eval_pointcloud_per_class{10};
   std::vector<uint8_t> enabled_labels;
   double max_objects_stamp_gap_s{0.5};
   double stop_velocity{0.1};

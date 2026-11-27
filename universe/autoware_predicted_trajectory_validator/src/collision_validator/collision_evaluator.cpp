@@ -930,20 +930,24 @@ std::vector<CollisionCandidate> CollisionEvaluator::evaluate(
     return candidates;
   }
 
-  // Pointcloud: the closest n_eval_pointcloud clusters (by centroid), as static points.
+  // Pointcloud: per class, the closest n_eval_pointcloud_per_class clusters (by centroid), as
+  // static points.
   const auto & clusters = point_clusters->clusters;
-  std::vector<std::pair<double, size_t>> selected_clusters;
-  selected_clusters.reserve(clusters.size());
+  std::vector<std::pair<double, size_t>> sorted_clusters;
+  sorted_clusters.reserve(clusters.size());
   for (size_t i = 0; i < clusters.size(); ++i) {
-    selected_clusters.emplace_back(boost::geometry::distance(ego_now, clusters[i].centroid), i);
+    sorted_clusters.emplace_back(boost::geometry::distance(ego_now, clusters[i].centroid), i);
   }
   std::stable_sort(
-    selected_clusters.begin(), selected_clusters.end(),
+    sorted_clusters.begin(), sorted_clusters.end(),
     [](const auto & lhs, const auto & rhs) { return lhs.first < rhs.first; });
-  if (selected_clusters.size() > param_.n_eval_pointcloud) {
-    selected_clusters.resize(param_.n_eval_pointcloud);
-  }
-  for (const auto & [centroid_distance, index] : selected_clusters) {
+  std::array<size_t, kNumPointCloudClassIds> n_evaluated{};
+  for (const auto & [centroid_distance, index] : sorted_clusters) {
+    const auto class_id = static_cast<size_t>(clusters[index].classification);
+    if (n_evaluated[class_id] >= param_.n_eval_pointcloud_per_class) {
+      continue;
+    }
+    ++n_evaluated[class_id];
     evaluate_points(ego_sweep, braked_sweeps, clusters[index].points, candidates);
   }
 

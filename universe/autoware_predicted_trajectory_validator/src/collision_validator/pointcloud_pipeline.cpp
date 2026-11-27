@@ -21,6 +21,8 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -36,6 +38,13 @@ PointCloudParam to_pointcloud_param(
 {
   const auto & pointcloud = params.pointcloud;
   PointCloudParam out;
+  for (const auto & name : pointcloud.enabled_classes) {
+    const auto classification = collision_validator::pointcloud_class_from_name(name);
+    if (!classification) {
+      throw std::invalid_argument("unknown pointcloud class: " + name);
+    }
+    out.target_class_mask.set(static_cast<size_t>(*classification));
+  }
   out.roi_rear = pointcloud.roi.rear;
   out.roi_front_margin = pointcloud.roi.front_margin;
   out.roi_lateral = pointcloud.roi.lateral;

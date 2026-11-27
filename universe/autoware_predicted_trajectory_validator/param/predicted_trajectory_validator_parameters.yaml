@@ -124,26 +124,23 @@ predicted_trajectory_validator:
         description: Distance from the object center to the rear axle divided by the object length, used to recompute the yaw of vehicle predicted paths. Must be in [0, 0.5].
         validation:
           bounds<>: [0.0, 0.5]
-    enabled_object_classes:
-      type: string_array
-      description: Object classification labels that raise a collision warning.
-      validation:
-        subset_of<>: [[unknown, car, truck, bus, trailer, motorcycle, bicycle, pedestrian]]
-    enable_pointcloud:
-      type: bool
-      description: If true, pointcloud clusters raise a collision warning.
-      read_only: true
-    max_evaluations:
-      object:
+    object:
+      enabled_classes:
+        type: string_array
+        description: Object classification labels that raise a collision warning.
+        validation:
+          subset_of<>: [[unknown, car, truck, bus, trailer, motorcycle, bicycle, pedestrian]]
+      max_evaluations:
         type: int
         description: Maximum number of objects evaluated per cycle (closest first).
-      pointcloud:
-        type: int
-        description: Maximum number of pointcloud clusters evaluated per cycle (closest first).
-    max_objects_stamp_gap_s:
-      type: double
-      description: Objects older than this relative to the predicted trajectory are not evaluated [s].
+      max_stamp_gap_s:
+        type: double
+        description: Objects older than this relative to the predicted trajectory are not evaluated [s].
     pointcloud:
+      enable:
+        type: bool
+        description: If true, pointcloud clusters raise a collision warning. The pointcloud needs a class_id field; a pointcloud without it gives no clusters.
+        read_only: true
       roi:
         rear:
           type: double
@@ -188,3 +185,30 @@ predicted_trajectory_validator:
         description: Maximum age of the pointcloud clusters to evaluate. Beyond it, the hazard alert is not published [s].
         validation:
           gt<>: [0.0]
+      enabled_classes:
+        type: string_array
+        description: Pointcloud classes (class_id) whose points are clustered and evaluated as static obstacles.
+        validation:
+          subset_of<>:
+            [
+              [
+                car,
+                truck,
+                bus,
+                motorcycle,
+                bicycle,
+                pedestrian,
+                animal,
+                hazard,
+                flat_surface,
+                structure,
+                vegetation,
+                noise,
+                invalid,
+              ],
+            ]
+      max_evaluations_per_class:
+        type: int
+        description: Maximum number of clusters evaluated per cycle for each enabled class (closest first).
+        validation:
+          gt_eq<>: [0]
